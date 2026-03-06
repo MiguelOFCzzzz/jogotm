@@ -1,140 +1,191 @@
-'use client'; // Necessário no Next.js App Router para usar estados e hooks
+'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-
-// Deixe o socket preparado (ele só vai conectar de verdade quando configurarmos o backend)
-let socket: Socket;
+import { useRouter } from 'next/navigation';
 
 export default function RpgLobby() {
+  const router = useRouter();
+
   const [tela, setTela] = useState<'inicial' | 'lobby'>('inicial');
   const [nome, setNome] = useState('');
   const [limiteJogadores, setLimiteJogadores] = useState(4);
   const [codigoSalaInput, setCodigoSalaInput] = useState('');
   
-  // Estados do Lobby
   const [codigoSala, setCodigoSala] = useState('');
   const [jogadores, setJogadores] = useState<string[]>([]);
   const [isHost, setIsHost] = useState(false);
 
-  useEffect(() => {
-    // Inicializa a conexão com o backend
-    socket = io('http://localhost:3001', { autoConnect: false }); 
-    socket.connect();
+  const socketRef = useRef<Socket | null>(null);
 
-    // Ouvintes de eventos do servidor
-    socket.on('sala_criada', (codigo) => {
+  useEffect(() => {
+    socketRef.current = io('http://localhost:3001'); 
+
+    socketRef.current.on('sala_criada', (codigo) => {
       setCodigoSala(codigo);
       setTela('lobby');
       setIsHost(true);
-      setJogadores([nome]); // Adiciona você mesmo na lista
+      setJogadores([nome]);
     });
 
-    socket.on('entrou_na_sala', (dados) => {
+    socketRef.current.on('entrou_na_sala', (dados) => {
       setCodigoSala(dados.codigo);
       setTela('lobby');
       setJogadores(dados.jogadores);
+      setIsHost(false);
     });
 
-    socket.on('atualizar_jogadores', (novaLista) => {
+    socketRef.current.on('atualizar_jogadores', (novaLista) => {
       setJogadores(novaLista);
     });
 
+    socketRef.current.on('iniciar_customizacao', (dados) => {
+      const codigoFinal = dados?.codigoSala || codigoSala;
+      if (codigoFinal && codigoFinal !== "GERANDO...") {
+        router.push(`/customizacao?sala=${codigoFinal}`);
+      } else {
+        setCodigoSala((prev) => {
+          if (prev && prev !== "GERANDO...") {
+            router.push(`/customizacao?sala=${prev}`);
+          } else {
+            // Fallback de segurança para não travar o desenvolvimento
+            router.push(`/customizacao?sala=TESTE1`);
+          }
+          return prev;
+        });
+      }
+    });
+
+    socketRef.current.on('erro', (msg) => {
+      alert(msg);
+    });
+
     return () => {
-      socket.disconnect();
+      socketRef.current?.disconnect();
     };
-  }, [nome]);
+  }, [nome, router, codigoSala]);
 
   const criarSala = () => {
-    if (!nome) return alert('Digite seu nome primeiro!');
-    socket.emit('criar_sala', { nome, limite: limiteJogadores });
+    if (!nome) return alert('Diga seu nome, viajante!');
+    setTela('lobby'); 
+    setIsHost(true);
+    setJogadores([nome]);
+    setCodigoSala("GERANDO..."); 
+    socketRef.current?.emit('criar_sala', { nome, limite: limiteJogadores });
   };
 
   const entrarSala = () => {
-    if (!nome) return alert('Digite seu nome primeiro!');
-    if (!codigoSalaInput) return alert('Digite o código da sala!');
-    socket.emit('entrar_sala', { nome, codigo: codigoSalaInput });
+    if (!nome || !codigoSalaInput) return alert('Preencha os dados!');
+    socketRef.current?.emit('entrar_sala', { nome, codigo: codigoSalaInput });
+  };
+
+  const iniciarPartida = () => {
+    if (!codigoSala || codigoSala === "GERANDO...") return alert("Aguarde o selo...");
+    socketRef.current?.emit('comecar_jogo', { codigo: codigoSala });
   };
 
   return (
-    // Fundo Épico (Céu, Castelo, Montanhas)
-    <div className="min-h-screen bg-slate-900 text-amber-100 font-mono flex flex-col justify-center items-center bg-cover bg-center" style={{ backgroundImage: "url('/images/fundo-rpg.png')" }}>
-      
-      {/* Título com a Espada - Centralizado no Topo */}
-      <img src="/images/logo-espada.png" alt="Glory Hold" className="h-40 mb-10 drop-shadow-2xl" />
+    <main className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-black font-serif">
+      <div 
+        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60"
+        style={{ backgroundImage: "url('https://img.freepik.com/vetores-gratis/castelo-medieval-magico-a-noite-com-paisagem-de-montanha-de-fantasia-halloween-torre-de-construcao-de-conto-de-fadas-com-luz-de-aurora-verde-no-ceu-casa-de-castelo-encantada-polar-acima-de-misterio-borealis-ilustracao_107791-23889.jpg?semt=ais_hybrid&w=740&q=80')" }} 
+      />
+      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 to-black/90"></div>
 
-      {/* Painel Central de Pedra (Estruturado como na Imagem) */}
-      <div className="bg-slate-800 p-6 border-4 border-amber-900 rounded-lg shadow-3xl shadow-black/80 w-full max-w-lg text-center bg-cover" style={{ backgroundImage: "url('/images/painel-pedra.png')" }}>
-        
-        {tela === 'inicial' && (
-          <div className="grid grid-cols-2 gap-6">
-            
-            {/* Título do Painel */}
-            <h2 className="col-span-2 text-2xl font-bold text-amber-500 uppercase tracking-widest border-b-2 border-amber-800 pb-2 mb-4">Comando da Taverna</h2>
+      <div className="relative z-20 w-full max-w-xl px-4 animate-in fade-in zoom-in duration-700">
+        <div className="text-center mb-8">
+          <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-white drop-shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+            GLORY <span className="text-purple-500">DARK</span>
+          </h1>
+        </div>
 
-            {/* Lado Esquerdo: Nome do Aventureiro */}
-            <div className="space-y-4">
-              <label className="block text-sm text-amber-200 uppercase">Nome do Aventureiro:</label>
-              <div className="relative">
-                <img src="/images/slot-pergaminho.png" alt="Fundo Pergaminho" className="absolute inset-0 w-full h-full object-cover rounded" />
-                <input 
-                  type="text" 
-                  placeholder="ex: Mago Negro" 
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="relative w-full p-3 bg-transparent text-amber-950 font-bold rounded text-center focus:outline-none focus:ring-0 placeholder:text-amber-800"
-                />
-              </div>
-            </div>
+        <div className="bg-zinc-900/90 border-2 border-purple-900/50 rounded-xl shadow-[0_0_50px_rgba(88,28,135,0.3)] overflow-hidden">
+          <div className="bg-purple-950/40 border-b border-purple-900/30 p-4 text-center">
+            <h2 className="text-purple-400 font-bold uppercase tracking-widest text-sm">
+              {tela === 'inicial' ? 'Portal das Sombras' : 'Assembleia de Heróis'}
+            </h2>
+          </div>
 
-            {/* Lado Direito: Seleção de Jogadores */}
-            <div className="space-y-4">
-              <label className="block text-sm text-amber-200 uppercase">Jogadores:</label>
-              <div className="flex justify-center items-center space-x-2">
-                <button onClick={() => setLimiteJogadores(prev => Math.max(2, prev - 1))} className="p-2 text-2xl text-amber-500 hover:text-amber-400">◀</button>
-                <div className="w-16 h-12 bg-amber-950/50 border border-amber-800 rounded flex justify-center items-center">
-                  <span className="text-3xl font-bold text-amber-300">{limiteJogadores}</span>
+          <div className="p-8 space-y-8">
+            {tela === 'inicial' ? (
+              <>
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-purple-200/70 uppercase">Identidade</label>
+                  <input 
+                    type="text" value={nome} onChange={(e) => setNome(e.target.value)}
+                    placeholder="Ex: Malachai"
+                    className="w-full bg-black/60 border border-purple-900/30 p-4 rounded-lg text-white focus:border-purple-500 outline-none transition-all"
+                  />
                 </div>
-                <button onClick={() => setLimiteJogadores(prev => Math.min(6, prev + 1))} className="p-2 text-2xl text-amber-500 hover:text-amber-400">▶</button>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm text-purple-200/70 uppercase">Membros</label>
+                    <div className="flex items-center justify-between bg-black/60 border border-purple-900/30 rounded-lg p-2 text-white">
+                      <button onClick={() => setLimiteJogadores(Math.max(1, limiteJogadores - 1))} className="hover:text-purple-500 transition-colors w-8">−</button>
+                      <span className="font-bold">{limiteJogadores}</span>
+                      <button onClick={() => setLimiteJogadores(Math.min(6, limiteJogadores + 1))} className="hover:text-purple-500 transition-colors w-8">+</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm text-purple-200/70 uppercase">Selo</label>
+                    <input 
+                      type="text" value={codigoSalaInput} maxLength={6}
+                      onChange={(e) => setCodigoSalaInput(e.target.value.toUpperCase())}
+                      className="w-full bg-black/60 border border-purple-900/30 p-2 text-center text-purple-400 font-mono focus:border-purple-500 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+                <button onClick={criarSala} className="w-full bg-purple-700 hover:bg-purple-600 text-white font-black py-4 rounded-lg uppercase tracking-widest shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none transition-all">
+                  Iniciar Ritual
+                </button>
+                <button onClick={entrarSala} className="w-full bg-zinc-800 hover:bg-zinc-700 text-purple-200 py-3 rounded-lg text-xs uppercase transition-colors">
+                  Atravessar Portal
+                </button>
+              </>
+            ) : (
+              <div className="text-center space-y-6">
+                <div>
+                  <p className="text-purple-400/70 text-xs uppercase mb-2">Selo Místico</p>
+                  <div className="text-4xl font-mono font-black text-purple-300 bg-black/60 py-4 border border-purple-500/30 rounded-lg">
+                    {codigoSala}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    // Garante que nunca leve o valor "GERANDO..." para a URL
+                    const codigoFinal = (codigoSala === "GERANDO..." || !codigoSala) ? "TESTE1" : codigoSala;
+                    router.push(`/customizacao?sala=${codigoFinal}`);
+                  }} 
+                  className="text-[10px] text-zinc-600 hover:text-purple-500 transition-colors uppercase tracking-widest cursor-pointer"
+                >
+                  [ Forçar Entrada Solo ]
+                </button>
+
+                <div className="space-y-3 text-left">
+                  <p className="text-[10px] font-bold text-purple-500 uppercase border-b border-purple-900/40 pb-1">Viajantes ({jogadores.length})</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {jogadores.map((jog, i) => (
+                      <div key={i} className="bg-purple-950/20 border border-purple-900/30 p-2 rounded text-sm text-purple-100 flex items-center gap-2">
+                        <span className="text-purple-500">{i === 0 ? '✦' : '✧'}</span> {jog}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {isHost && (
+                  <button 
+                    onClick={iniciarPartida}
+                    className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-4 rounded-lg uppercase tracking-[0.2em] shadow-[0_4px_0_rgb(76,29,149)] active:translate-y-1 active:shadow-none transition-all"
+                  >
+                    Despertar o Mundo
+                  </button>
+                )}
               </div>
-            </div>
-
-            {/* Botão Principal: Criar Nova Aventura (Destaque) */}
-            <div className="col-span-2 mt-4">
-              <button onClick={criarSala} className="w-full p-4 bg-amber-700 hover:bg-amber-600 text-slate-950 font-bold rounded-md shadow-lg border-2 border-amber-900 transition-colors text-xl uppercase tracking-wider relative overflow-hidden">
-                <span className="absolute -top-1 left-2 text-xl">👑</span>
-                Criar Nova Aventura
-              </button>
-            </div>
-
-            <hr className="col-span-2 border-amber-900 border-2 mt-4 mb-2" />
-
-            {/* Seção: Entrar na Sala */}
-            <div className="col-span-2 space-y-4">
-              <label className="block text-sm text-amber-200 uppercase">Código da Sala:</label>
-              <input 
-                type="text" 
-                placeholder="AAAA11" 
-                value={codigoSalaInput}
-                onChange={(e) => setCodigoSalaInput(e.target.value.toUpperCase())}
-                className="w-full p-3 bg-amber-950/50 border border-amber-800 rounded text-center uppercase text-amber-100 placeholder:text-amber-600 focus:outline-none"
-                maxLength={6}
-              />
-              <button onClick={entrarSala} className="w-full p-3 bg-slate-700 hover:bg-slate-600 text-amber-100 font-bold border border-amber-700 rounded transition-colors uppercase">
-                Entrar na Aventura
-              </button>
-            </div>
+            )}
           </div>
-        )}
-
-        {tela === 'lobby' && (
-          // O Lobby pode manter uma estrutura similar, adaptada conforme a necessidade
-          <div className="space-y-6">
-            {/* ... (conteúdo do lobby mantido, adaptado para o novo estilo) ... */}
-          </div>
-        )}
-
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
