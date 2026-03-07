@@ -3,7 +3,6 @@
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-// 1. DEFINIÇÃO DOS TIPOS (Resolvendo "Cannot find name 'Classe'")
 type Classe = {
   id: string;
   nome: string;
@@ -33,15 +32,13 @@ const CLASSES: Classe[] = [
   },
 ];
 
-// Componente Interno para usar useSearchParams (exigência do Next.js 13+)
-function ConteudoCustomizacao() {
+function ConteudoCostumizacao() {
   const [classeSel, setClasseSel] = useState<Classe>(CLASSES[0]);
   const [nome, setNome] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Captura o código da sala da URL (?sala=TESTE1)
   const sala_codigo = searchParams.get('sala');
 
   const aceitarDestino = async () => {
@@ -51,7 +48,7 @@ function ConteudoCustomizacao() {
     }
 
     if (!sala_codigo) {
-      alert("Erro: Código da sala não encontrado na URL.");
+      alert("Erro: Código da sala não encontrado.");
       return;
     }
 
@@ -67,16 +64,25 @@ function ConteudoCustomizacao() {
           agi: classeSel.atributos.agi,
           int: classeSel.atributos.int,
           vit: classeSel.atributos.vit,
-          sala_codigo: sala_codigo // Agora enviando corretamente!
+          sala_codigo: sala_codigo 
         }),
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        alert("Destino Selado!");
-        // router.push('/game');
+        // Salvando com as chaves que o jogo e o lobby reconhecem
+        localStorage.setItem('glory_dark_char_nome', nome);
+        localStorage.setItem('glory_dark_char_classe', classeSel.id);
+        localStorage.setItem('glory_dark_char_str', String(classeSel.atributos.str));
+        localStorage.setItem('glory_dark_char_agi', String(classeSel.atributos.agi));
+        localStorage.setItem('glory_dark_char_int', String(classeSel.atributos.int));
+        localStorage.setItem('glory_dark_char_vit', String(classeSel.atributos.vit));
+        localStorage.setItem('glory_dark_last_sala', sala_codigo);
+
+        setTimeout(() => {
+          router.push(`/game?sala=${sala_codigo}`);
+        }, 100);
       } else {
+        const data = await response.json();
         alert(`Erro: ${data.error || 'Falha ao salvar'}`);
       }
     } catch (error) {
@@ -182,11 +188,10 @@ function ConteudoCustomizacao() {
   );
 }
 
-// Exportação padrão com Suspense (necessário para useSearchParams no Next.js)
-export default function CustomizacaoPersonagem() {
+export default function CostumizacaoPersonagem() {
   return (
     <Suspense fallback={<div className="bg-black min-h-screen flex items-center justify-center text-purple-500">Invocando Portal...</div>}>
-      <ConteudoCustomizacao />
+      <ConteudoCostumizacao />
     </Suspense>
   );
 }

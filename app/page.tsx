@@ -16,9 +16,19 @@ export default function RpgLobby() {
   const [jogadores, setJogadores] = useState<string[]>([]);
   const [isHost, setIsHost] = useState(false);
 
+  // ESTADO PARA MEMÓRIA DO HERÓI
+  const [heroiSalvo, setHeroiSalvo] = useState<{nome: string, sala: string} | null>(null);
+
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    // --- LÓGICA DE MEMÓRIA (Sincronizada com o novo padrão) ---
+    const nomeSalvo = localStorage.getItem('glory_dark_char_nome');
+    const salaSalva = localStorage.getItem('glory_dark_last_sala');
+    if (nomeSalvo && salaSalva) {
+      setHeroiSalvo({ nome: nomeSalvo, sala: salaSalva });
+    }
+
     socketRef.current = io('http://localhost:3001'); 
 
     socketRef.current.on('sala_criada', (codigo) => {
@@ -39,21 +49,10 @@ export default function RpgLobby() {
       setJogadores(novaLista);
     });
 
-    socketRef.current.on('iniciar_customizacao', (dados) => {
+    // MUDANÇA PARA "COSTUMIZACAO"
+    socketRef.current.on('iniciar_costumizacao', (dados) => {
       const codigoFinal = dados?.codigoSala || codigoSala;
-      if (codigoFinal && codigoFinal !== "GERANDO...") {
-        router.push(`/customizacao?sala=${codigoFinal}`);
-      } else {
-        setCodigoSala((prev) => {
-          if (prev && prev !== "GERANDO...") {
-            router.push(`/customizacao?sala=${prev}`);
-          } else {
-            // Fallback de segurança para não travar o desenvolvimento
-            router.push(`/customizacao?sala=TESTE1`);
-          }
-          return prev;
-        });
-      }
+      router.push(`/costumizacao?sala=${codigoFinal || "TESTE1"}`);
     });
 
     socketRef.current.on('erro', (msg) => {
@@ -84,6 +83,13 @@ export default function RpgLobby() {
     socketRef.current?.emit('comecar_jogo', { codigo: codigoSala });
   };
 
+  // FUNÇÃO PARA RETOMAR
+  const retomarJornada = () => {
+    if (heroiSalvo) {
+      router.push(`/game?sala=${heroiSalvo.sala}`);
+    }
+  };
+
   return (
     <main className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-black font-serif">
       <div 
@@ -109,6 +115,15 @@ export default function RpgLobby() {
           <div className="p-8 space-y-8">
             {tela === 'inicial' ? (
               <>
+                {heroiSalvo && (
+                  <button 
+                    onClick={retomarJornada}
+                    className="w-full bg-gradient-to-r from-amber-900/40 to-amber-600/40 border border-amber-500/50 text-amber-200 py-3 rounded-lg text-xs font-black uppercase tracking-[0.2em] hover:from-amber-800/60 transition-all mb-4 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                  >
+                    ✨ Retomar Jornada com {heroiSalvo.nome}
+                  </button>
+                )}
+
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-purple-200/70 uppercase">Identidade</label>
                   <input 
@@ -117,6 +132,7 @@ export default function RpgLobby() {
                     className="w-full bg-black/60 border border-purple-900/30 p-4 rounded-lg text-white focus:border-purple-500 outline-none transition-all"
                   />
                 </div>
+                
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="text-sm text-purple-200/70 uppercase">Membros</label>
@@ -135,12 +151,15 @@ export default function RpgLobby() {
                     />
                   </div>
                 </div>
-                <button onClick={criarSala} className="w-full bg-purple-700 hover:bg-purple-600 text-white font-black py-4 rounded-lg uppercase tracking-widest shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none transition-all">
-                  Iniciar Ritual
-                </button>
-                <button onClick={entrarSala} className="w-full bg-zinc-800 hover:bg-zinc-700 text-purple-200 py-3 rounded-lg text-xs uppercase transition-colors">
-                  Atravessar Portal
-                </button>
+
+                <div className="space-y-3">
+                  <button onClick={criarSala} className="w-full bg-purple-700 hover:bg-purple-600 text-white font-black py-4 rounded-lg uppercase tracking-widest shadow-[0_4px_0_rgb(88,28,135)] active:translate-y-1 active:shadow-none transition-all">
+                    Iniciar Ritual
+                  </button>
+                  <button onClick={entrarSala} className="w-full bg-zinc-800 hover:bg-zinc-700 text-purple-200 py-3 rounded-lg text-xs uppercase transition-colors">
+                    Atravessar Portal
+                  </button>
+                </div>
               </>
             ) : (
               <div className="text-center space-y-6">
@@ -153,9 +172,9 @@ export default function RpgLobby() {
 
                 <button 
                   onClick={() => {
-                    // Garante que nunca leve o valor "GERANDO..." para a URL
                     const codigoFinal = (codigoSala === "GERANDO..." || !codigoSala) ? "TESTE1" : codigoSala;
-                    router.push(`/customizacao?sala=${codigoFinal}`);
+                    // MUDANÇA PARA "COSTUMIZACAO"
+                    router.push(`/costumizacao?sala=${codigoFinal}`);
                   }} 
                   className="text-[10px] text-zinc-600 hover:text-purple-500 transition-colors uppercase tracking-widest cursor-pointer"
                 >
@@ -188,4 +207,4 @@ export default function RpgLobby() {
       </div>
     </main>
   );
-}
+} 
