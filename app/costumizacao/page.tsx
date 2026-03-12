@@ -19,13 +19,13 @@ const CLASSES: Classe[] = [
     atributos: { str: 10, agi: 4, int: 2, vit: 9 } 
   },
   { 
-    id: 'mago', nome: 'Mago Arcano', 
-    descricao: 'Manipulador das energias violetas e segredos do vazio.',
-    imagem: '🔮', 
+    id: 'mago', nome: 'GOJO', 
+    descricao: 'HOLLOW PURPLE...',
+    imagem: '🤞', 
     atributos: { str: 2, agi: 5, int: 10, vit: 4 } 
   },
   { 
-    id: 'sombrio', nome: 'Necromante', 
+    id: 'sombrio', nome: 'Sung Jin-Woo', 
     descricao: 'Uma sombra que corta a garganta dos reis antes do amanhecer.',
     imagem: '💀', 
     atributos: { str: 5, agi: 10, int: 5, vit: 3 } 
