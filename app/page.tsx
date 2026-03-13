@@ -106,7 +106,7 @@ export default function RpgLobby() {
     <main className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-black font-serif">
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60"
-        style={{ backgroundImage: "url('https://i.pinimg.com/736x/09/9d/89/099d897998e65891b09e81c3d82dd835.jpg')" }} 
+        style={{ backgroundImage: "url('https://img.freepik.com/fotos-premium/velocidade-da-luz-redemoinho-de-vortice-neon-linhas-torcidas-brilhantes-em-movimento-hiper-salto-para-outra-galaxia_35672-1767.jpg')" }} 
       />
       <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-900/20 to-black/90" />
 

@@ -29,6 +29,9 @@ export type ExplosaoArea  = { x:number; y:number; timer:number; maxTimer:number 
 export type CorteSomb     = { ativo:boolean; timer:number; duracao:number; anguloBase:number };
 export type JogadorRemoto = { id:string; nome:string; classe:string; x:number; y:number; hp:number; hpMax:number; direcaoRad:number };
 
+// ─── Tipo Poção ───────────────────────────────────────────────────────────────
+export type Pocao = { x:number; y:number; id:number; cura:number; pulso:number };
+
 export const SLIME_PALETAS = [
   { base:'#7f1d1d', variante:'#450a0a', brilho:'#ef4444', olho:'#fca5a5' },
   { base:'#14532d', variante:'#052e16', brilho:'#4ade80', olho:'#bbf7d0' },
@@ -49,12 +52,457 @@ export function iconeTipo(tipo: string): string {
   return 'SLIME';
 }
 
+// ─── Cenário épico top-down ───────────────────────────────────────────────────
+export function desenharCenarioEpico(
+  ctx: CanvasRenderingContext2D,
+  worldW: number, worldH: number,
+  tick: number
+) {
+  // Fundo base — pedra escura
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  // Grade de pedras (tiles)
+  const tileSize = 120;
+  const cols = Math.ceil(worldW / tileSize) + 1;
+  const rows = Math.ceil(worldH / tileSize) + 1;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tx = col * tileSize;
+      const ty = row * tileSize;
+      // Variação de cor por hash simples
+      const hash = (col * 7 + row * 13) % 5;
+      const baseColors = ['#0f0f1a','#0d0d18','#111120','#0c0c16','#101018'];
+      ctx.fillStyle = baseColors[hash];
+      ctx.fillRect(tx, ty, tileSize - 1, tileSize - 1);
+
+      // Bordas das pedras (linhas de rejunte)
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tx, ty, tileSize - 1, tileSize - 1);
+
+      // Detalhe interno — rachadura leve
+      if ((col + row) % 4 === 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(tx + tileSize * 0.2, ty + tileSize * 0.3);
+        ctx.lineTo(tx + tileSize * 0.5, ty + tileSize * 0.6);
+        ctx.stroke();
+      }
+      if ((col + row) % 5 === 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(tx + tileSize * 0.7, ty + tileSize * 0.1);
+        ctx.lineTo(tx + tileSize * 0.85, ty + tileSize * 0.45);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Pentagrama no centro do mapa — runas épicas
+  const cx = worldW / 2, cy = worldH / 2;
+  const runaR = 450;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tick * 0.0008);
+
+  // Círculo externo da runa
+  ctx.globalAlpha = 0.07 + 0.03 * Math.sin(tick * 0.02);
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#7c3aed';
+  ctx.shadowBlur = 20;
+  ctx.beginPath(); ctx.arc(0, 0, runaR, 0, Math.PI * 2); ctx.stroke();
+
+  // Estrela de 5 pontas
+  ctx.strokeStyle = '#4c1d95';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const a1 = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const a2 = ((i + 2) / 5) * Math.PI * 2 - Math.PI / 2;
+    if (i === 0) ctx.moveTo(Math.cos(a1) * runaR, Math.sin(a1) * runaR);
+    ctx.lineTo(Math.cos(a2) * runaR, Math.sin(a2) * runaR);
+  }
+  ctx.closePath(); ctx.stroke();
+
+  // Círculo interno
+  ctx.globalAlpha = 0.05;
+  ctx.strokeStyle = '#a855f7';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, runaR * 0.6, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, runaR * 0.3, 0, Math.PI * 2); ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // Segunda runa — giratória contrária
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-tick * 0.0012);
+  ctx.globalAlpha = 0.04 + 0.02 * Math.sin(tick * 0.025);
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * runaR * 0.8, Math.sin(a) * runaR * 0.8);
+  }
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, runaR * 0.8, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // Velas nos cantos do mapa
+  const cantoPositions = [
+    { x: 80, y: 80 }, { x: worldW - 80, y: 80 },
+    { x: 80, y: worldH - 80 }, { x: worldW - 80, y: worldH - 80 },
+    { x: worldW / 2, y: 80 }, { x: worldW / 2, y: worldH - 80 },
+    { x: 80, y: worldH / 2 }, { x: worldW - 80, y: worldH / 2 },
+  ];
+  cantoPositions.forEach((pos, i) => {
+    const flicker = 0.6 + 0.4 * Math.sin(tick * 0.15 + i * 1.3);
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    // Base da vela
+    ctx.fillStyle = '#1c1917';
+    ctx.fillRect(-4, -14, 8, 18);
+    // Chama
+    ctx.globalAlpha = flicker;
+    ctx.fillStyle = '#fbbf24';
+    ctx.shadowColor = '#f59e0b';
+    ctx.shadowBlur = 20 * flicker;
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.bezierCurveTo(5, -22, 3, -30, 0, -32);
+    ctx.bezierCurveTo(-3, -30, -5, -22, 0, -14);
+    ctx.fill();
+    // Brilho da chama (aura no chão)
+    const glow = ctx.createRadialGradient(0, -14, 0, 0, 0, 35 * flicker);
+    glow.addColorStop(0, `rgba(251,191,36,${0.12 * flicker})`);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 35 * flicker, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  });
+
+  // Bordas do mapa — paredes de pedra sólida
+  const wallThick = 40;
+  const wallGrad = ctx.createLinearGradient(0, 0, wallThick, 0);
+  wallGrad.addColorStop(0, '#1a1a2e');
+  wallGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  // Esquerda
+  ctx.fillStyle = wallGrad; ctx.fillRect(0, 0, wallThick, worldH);
+  // Direita
+  ctx.save(); ctx.translate(worldW, 0); ctx.scale(-1, 1);
+  ctx.fillRect(0, 0, wallThick, worldH); ctx.restore();
+  // Cima
+  const wallGradH = ctx.createLinearGradient(0, 0, 0, wallThick);
+  wallGradH.addColorStop(0, '#1a1a2e'); wallGradH.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = wallGradH; ctx.fillRect(0, 0, worldW, wallThick);
+  // Baixo
+  ctx.save(); ctx.translate(0, worldH); ctx.scale(1, -1);
+  ctx.fillRect(0, 0, worldW, wallThick); ctx.restore();
+
+  // Linha de borda luminosa do mapa
+  ctx.strokeStyle = 'rgba(124,58,237,0.3)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(2, 2, worldW - 4, worldH - 4);
+}
+
+// ─── Poção de cura ────────────────────────────────────────────────────────────
+export function desenharPocao(ctx: CanvasRenderingContext2D, p: Pocao) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  const bob = Math.sin(p.pulso) * 3;
+  ctx.translate(0, bob);
+
+  // Aura de brilho
+  const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 22);
+  aura.addColorStop(0, 'rgba(74,222,128,0.4)');
+  aura.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = aura;
+  ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+
+  // Corpo da poção
+  ctx.fillStyle = '#15803d';
+  ctx.strokeStyle = '#4ade80';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#4ade80';
+  ctx.shadowBlur = 12;
+
+  // Frasco
+  ctx.beginPath();
+  ctx.moveTo(-5, -8);
+  ctx.lineTo(-5, -4);
+  ctx.bezierCurveTo(-12, 0, -12, 14, 0, 16);
+  ctx.bezierCurveTo(12, 14, 12, 0, 5, -4);
+  ctx.lineTo(5, -8);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Gargalo
+  ctx.fillStyle = '#166534';
+  ctx.beginPath(); ctx.rect(-4, -12, 8, 5); ctx.fill();
+  ctx.strokeRect(-4, -12, 8, 5);
+
+  // Tampa
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath(); ctx.rect(-5, -14, 10, 3); ctx.fill();
+
+  // Brilho interno
+  ctx.globalAlpha = 0.5 + 0.3 * Math.sin(p.pulso * 2);
+  const liq = ctx.createLinearGradient(-8, -2, 8, 12);
+  liq.addColorStop(0, 'rgba(134,239,172,0.8)');
+  liq.addColorStop(1, 'rgba(21,128,61,0.3)');
+  ctx.fillStyle = liq;
+  ctx.beginPath();
+  ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+  ctx.bezierCurveTo(10, 4, 10, 12, 0, 14);
+  ctx.bezierCurveTo(-10, 12, -10, 4, -4, 0);
+  ctx.fill();
+
+  // Cruz de cura
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-1.5, 4, 3, 7);
+  ctx.fillRect(-3.5, 6, 7, 3);
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ─── Marcação de jogador (seta + círculo no chão) ─────────────────────────────
+export function desenharMarcacaoJogador(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  size: number,
+  cor: string,
+  tick: number,
+  label?: string
+) {
+  const cx = x + size / 2, cy = y + size / 2;
+  const pulso = 0.7 + 0.3 * Math.sin(tick * 0.15);
+
+  ctx.save();
+
+  // Sombra elíptica no chão
+  ctx.globalAlpha = 0.35 * pulso;
+  const shadow = ctx.createRadialGradient(cx, cy + size * 0.4, 0, cx, cy + size * 0.4, size * 0.55);
+  shadow.addColorStop(0, cor);
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + size * 0.38, size * 0.5, size * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Círculo de chão pulsante
+  ctx.globalAlpha = 0.5 * pulso;
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = cor;
+  ctx.shadowBlur = 10;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.52 + Math.sin(tick * 0.12) * 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Seta apontando para baixo (marcador acima do personagem)
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = cor;
+  ctx.shadowColor = cor;
+  ctx.shadowBlur = 16;
+  const arrowY = y - 22 - Math.abs(Math.sin(tick * 0.12)) * 6;
+  ctx.beginPath();
+  ctx.moveTo(cx, arrowY + 12);
+  ctx.lineTo(cx - 8, arrowY);
+  ctx.lineTo(cx + 8, arrowY);
+  ctx.closePath();
+  ctx.fill();
+
+  if (label) {
+    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, arrowY - 4);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ─── Marcação de inimigo ──────────────────────────────────────────────────────
+export function desenharMarcacaoInimigo(
+  ctx: CanvasRenderingContext2D,
+  m: Monstro,
+  tick: number
+) {
+  const cx = m.x + m.size / 2, cy = m.y + m.size / 2;
+  const cor = m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff4444' : '#ef4444';
+  const pulso = 0.6 + 0.4 * Math.sin(tick * 0.1 + m.id * 0.5);
+
+  ctx.save();
+
+  // Sombra elíptica
+  ctx.globalAlpha = 0.25 * pulso;
+  const shadow = ctx.createRadialGradient(cx, cy + m.size * 0.4, 0, cx, cy + m.size * 0.4, m.size * 0.5);
+  shadow.addColorStop(0, cor);
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + m.size * 0.38, m.size * 0.48, m.size * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Círculo de chão (apenas para boss)
+  if (m.isBoss) {
+    ctx.globalAlpha = 0.45 * pulso;
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = m.isFinalBoss ? 3 : 2;
+    ctx.shadowColor = cor;
+    ctx.shadowBlur = 20;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, m.size * 0.58 + Math.sin(tick * 0.1) * 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ─── Minimapa ─────────────────────────────────────────────────────────────────
+export function desenharMinimapa(
+  ctx: CanvasRenderingContext2D,
+  playerX: number, playerY: number,
+  monstros: Monstro[],
+  remotos: Record<string, JogadorRemoto>,
+  pocoes: Pocao[],
+  worldW: number, worldH: number,
+  canvasW: number, canvasH: number,
+  tick: number
+) {
+  const MAP_W = 160, MAP_H = 110;
+  const MAP_X = 14, MAP_Y = 54; // abaixo do HUD de onda
+  const scaleX = MAP_W / worldW;
+  const scaleY = MAP_H / worldH;
+
+  ctx.save();
+
+  // Fundo do minimapa
+  ctx.fillStyle = 'rgba(5,5,15,0.88)';
+  ctx.strokeStyle = 'rgba(124,58,237,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(MAP_X - 2, MAP_Y - 2, MAP_W + 4, MAP_H + 4, 5);
+  ctx.fill(); ctx.stroke();
+
+  // Clip para o minimapa
+  ctx.beginPath();
+  ctx.roundRect(MAP_X, MAP_Y, MAP_W, MAP_H, 4);
+  ctx.clip();
+
+  // Fundo interno
+  ctx.fillStyle = '#080812';
+  ctx.fillRect(MAP_X, MAP_Y, MAP_W, MAP_H);
+
+  // Runa central no minimapa
+  ctx.globalAlpha = 0.15;
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(MAP_X + MAP_W / 2, MAP_Y + MAP_H / 2, MAP_H * 0.38, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Bordas do mapa
+  ctx.strokeStyle = 'rgba(124,58,237,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(MAP_X, MAP_Y, MAP_W, MAP_H);
+
+  // Poções — pontos verdes pequenos
+  pocoes.forEach(p => {
+    const mx = MAP_X + p.x * scaleX;
+    const my = MAP_Y + p.y * scaleY;
+    ctx.fillStyle = '#4ade80';
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // Inimigos — pontos vermelhos
+  monstros.forEach(m => {
+    const mx = MAP_X + (m.x + m.size / 2) * scaleX;
+    const my = MAP_Y + (m.y + m.size / 2) * scaleY;
+    const r = m.isFinalBoss ? 5 : m.isBoss ? 4 : 2.5;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff6666' : '#ef4444';
+    if (m.isBoss) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6; }
+    ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // Aliados remotos — pontos azuis
+  Object.values(remotos).forEach(jr => {
+    const mx = MAP_X + (jr.x + 40) * scaleX;
+    const my = MAP_Y + (jr.y + 40) * scaleY;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#60a5fa';
+    ctx.shadowColor = '#3b82f6'; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(mx, my, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // Jogador principal — ponto branco/verde pulsante
+  const px = MAP_X + (playerX + 40) * scaleX;
+  const py = MAP_Y + (playerY + 40) * scaleY;
+  const pulso = 0.7 + 0.3 * Math.sin(tick * 0.2);
+  ctx.globalAlpha = pulso;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#a3e635'; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+  // Círculo externo
+  ctx.globalAlpha = pulso * 0.5;
+  ctx.strokeStyle = '#a3e635'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+
+  // Label "MAPA"
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(167,139,250,0.8)';
+  ctx.fillText('⬛ MAPA', MAP_X + 2, MAP_Y - 4);
+
+  // Legenda
+  ctx.font = '7px monospace';
+  ctx.fillStyle = '#4ade80'; ctx.fillText('● Você', MAP_X + MAP_W + 6, MAP_Y + 10);
+  ctx.fillStyle = '#60a5fa'; ctx.fillText('● Aliado', MAP_X + MAP_W + 6, MAP_Y + 20);
+  ctx.fillStyle = '#ef4444'; ctx.fillText('● Inimigo', MAP_X + MAP_W + 6, MAP_Y + 30);
+  ctx.fillStyle = '#4ade80'; ctx.fillText('✚ Poção', MAP_X + MAP_W + 6, MAP_Y + 40);
+}
+
 // ─── Jogador remoto ───────────────────────────────────────────────────────────
 export function desenharJogadorRemoto(
   ctx: CanvasRenderingContext2D,
   jr: JogadorRemoto,
-  imgs: { guerreiro: HTMLImageElement|null; mago: HTMLImageElement|null; sombrio: HTMLImageElement|null }
+  imgs: { guerreiro: HTMLImageElement|null; mago: HTMLImageElement|null; sombrio: HTMLImageElement|null; aizen: HTMLImageElement|null; shadow: HTMLImageElement|null },
+  tick: number
 ) {
+  // Marcação de aliado (azul)
+  desenharMarcacaoJogador(ctx, jr.x, jr.y, 80, '#3b82f6', tick, jr.nome);
+
   const img = imgs[jr.classe as keyof typeof imgs] ?? null;
   if (img) ctx.drawImage(img, jr.x, jr.y, 80, 80);
   else { ctx.fillStyle=jr.classe==='mago'?'#a855f7':jr.classe==='guerreiro'?'#ef4444':'#10b981'; ctx.fillRect(jr.x,jr.y,80,80); }
@@ -65,7 +513,10 @@ export function desenharJogadorRemoto(
 }
 
 // ─── Slime / Monstro ──────────────────────────────────────────────────────────
-export function desenharSlime(ctx: CanvasRenderingContext2D, m: Monstro) {
+export function desenharSlime(ctx: CanvasRenderingContext2D, m: Monstro, tick?: number) {
+  // Marcação vermelha no chão
+  if (tick !== undefined) desenharMarcacaoInimigo(ctx, m, tick);
+
   const cx=m.x+m.size/2, cy=m.y+m.size/2, r=m.size/2;
   const bs=1+Math.sin(m.breathe)*.07;
   const hox=m.hitTimer>0?(Math.random()-.5)*8:0, hoy=m.hitTimer>0?(Math.random()-.5)*8:0;
@@ -164,6 +615,9 @@ export function desenharSlime(ctx: CanvasRenderingContext2D, m: Monstro) {
 
 // ─── Boss Final ───────────────────────────────────────────────────────────────
 export function desenharFinalBoss(ctx: CanvasRenderingContext2D, m: Monstro, tick: number) {
+  // Marcação de boss final (rosa/magenta pulsante)
+  desenharMarcacaoInimigo(ctx, m, tick);
+
   const cx=m.x+m.size/2, cy=m.y+m.size/2, r=m.size/2;
   const bs=1+Math.sin(m.breathe)*.05;
   const hox=m.hitTimer>0?(Math.random()-.5)*12:0, hoy=m.hitTimer>0?(Math.random()-.5)*12:0;
@@ -241,6 +695,9 @@ export function desenharProjetilInimigo(ctx: CanvasRenderingContext2D, p: Projet
 
 // ─── Aliado sombrio ───────────────────────────────────────────────────────────
 export function desenharAliado(ctx: CanvasRenderingContext2D, a: SlimeAliado, tick: number) {
+  // Marcação de aliado (ciano/verde)
+  desenharMarcacaoJogador(ctx, a.x, a.y, a.size, '#06b6d4', tick);
+
   const cx=a.x+a.size/2, cy=a.y+a.size/2, r=a.size/2, bs=1+Math.sin(a.breathe)*.07;
   const auraG=ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.2);
   auraG.addColorStop(0,'rgba(168,85,247,0.35)'); auraG.addColorStop(.5,'rgba(109,40,217,0.18)'); auraG.addColorStop(1,'rgba(0,0,0,0)');
@@ -571,7 +1028,6 @@ export function desenharInvocacaoUltimate(
     ctx.save(); ctx.globalAlpha=pa2; ctx.fillStyle=p.cor; ctx.shadowColor=p.cor; ctx.shadowBlur=10;
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); ctx.restore();
   });
-  // Igris
   const igrisEnter=Math.min(1,timer/70);
   igrisPos.x=W*(0.1+igrisEnter*0.22); igrisPos.y=H*0.5; igrisPos.alpha=igrisEnter; igrisPos.scale=0.5+igrisEnter*0.5;
   ctx.save(); ctx.globalAlpha=igrisPos.alpha*alpha; ctx.translate(igrisPos.x,igrisPos.y); ctx.scale(igrisPos.scale*1.1,igrisPos.scale*1.1);
@@ -589,7 +1045,6 @@ export function desenharInvocacaoUltimate(
   ctx.save(); ctx.globalAlpha=igrisEnter*alpha; ctx.textAlign='center';
   ctx.font='bold 16px monospace'; ctx.fillStyle='#c4b5fd'; ctx.shadowColor='#7c3aed'; ctx.shadowBlur=14;
   ctx.fillText('⚔ IGRIS',igrisPos.x,igrisPos.y+80*igrisPos.scale+12); ctx.shadowBlur=0; ctx.restore();
-  // Beru
   const beruEnter=Math.min(1,Math.max(0,(timer-20))/65);
   beruPos.x=W*(0.9-beruEnter*0.22); beruPos.y=H*0.5; beruPos.alpha=beruEnter; beruPos.scale=0.5+beruEnter*0.5;
   ctx.save(); ctx.globalAlpha=beruPos.alpha*alpha; ctx.translate(beruPos.x,beruPos.y); ctx.scale(beruPos.scale*1.1,beruPos.scale*1.1);
@@ -641,7 +1096,7 @@ export function desenharInvocacaoUltimate(
 export const SHADOW_SLASH_DUR  = 14;
 export const SHADOW_SLASH_RAIO = 130;
 export const EBONY_DUR         = 220;
-export const EBONY_AREA        = 280; // ← área bem mais longe ao redor do player
+export const EBONY_AREA        = 280;
 export const ATOMIC_DUR        = 480;
 export const ATOMIC_CD_MAX     = 16200;
 
@@ -652,7 +1107,6 @@ export type EbonySwirl = {
   raio: number;
 };
 
-/** Projétil ciano do Shadow Slash (espaço) — cor roxa neon */
 export function desenharShadowSlash(
   ctx: CanvasRenderingContext2D,
   px: number, py: number,
@@ -664,32 +1118,22 @@ export function desenharShadowSlash(
   const ai = anguloBase - 1.3, af = anguloBase + 1.3;
 
   ctx.save(); ctx.translate(cx, cy);
-
-  // Glow externo roxo
   ctx.globalAlpha = alpha * .2;
   ctx.strokeStyle = '#c026d3'; ctx.lineWidth = 32; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.arc(0, 0, SHADOW_SLASH_RAIO * .92, ai, af); ctx.stroke();
-
-  // Anel médio
   ctx.globalAlpha = alpha * .55;
   ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 14; ctx.lineCap = 'round';
   ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 24;
   ctx.beginPath(); ctx.arc(0, 0, SHADOW_SLASH_RAIO * .90, ai, af); ctx.stroke();
-
-  // Corpo principal — roxo neon
   ctx.globalAlpha = alpha * .9;
   ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 5; ctx.lineCap = 'round';
   ctx.shadowColor = '#e879f9'; ctx.shadowBlur = 28;
   ctx.beginPath(); ctx.arc(0, 0, SHADOW_SLASH_RAIO * .87, ai, af); ctx.stroke();
-
-  // Borda interna brilhante
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = '#f0abfc'; ctx.lineWidth = 1.5;
   ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
   ctx.beginPath(); ctx.arc(0, 0, SHADOW_SLASH_RAIO * .83, ai, af); ctx.stroke();
   ctx.shadowBlur = 0;
-
-  // Partículas neon roxas
   for (let i = 0; i < 8; i++) {
     const pa = ai + (af - ai) * (i / 7);
     const pr = SHADOW_SLASH_RAIO * (.82 + Math.random() * .12);
@@ -698,11 +1142,9 @@ export function desenharShadowSlash(
     ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(Math.cos(pa) * pr, Math.sin(pa) * pr, 3.5, 0, Math.PI * 2); ctx.fill();
   }
-
   ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.restore();
 }
 
-/** Ebony Swirl — redemoinho roxo NEON em volta do player (Z) */
 export function desenharEbonySwirl(
   ctx: CanvasRenderingContext2D,
   px: number, py: number,
@@ -713,13 +1155,9 @@ export function desenharEbonySwirl(
   const alpha = prog < .12 ? prog / .12 : prog > .85 ? 1 - (prog - .85) / .15 : 1;
 
   ctx.save(); ctx.translate(cx, cy);
-
-  // Anel de base grande
   ctx.globalAlpha = alpha * .18;
   ctx.strokeStyle = '#9333ea'; ctx.lineWidth = 60; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.arc(0, 0, EBONY_AREA * .75, 0, Math.PI * 2); ctx.stroke();
-
-  // Anéis giratórios roxo neon
   for (let r = 0; r < 5; r++) {
     const ra = tick * (.05 + r * .018) + r * Math.PI / 2.5;
     const rr = EBONY_AREA * (.3 + r * .16);
@@ -731,15 +1169,11 @@ export function desenharEbonySwirl(
     ctx.beginPath(); ctx.arc(0, 0, rr, ra + Math.PI, ra + Math.PI * 2.5); ctx.stroke();
   }
   ctx.shadowBlur = 0;
-
-  // Anel externo pulsante
   ctx.globalAlpha = alpha * (.4 + .3 * Math.sin(tick * .14));
   ctx.strokeStyle = '#c026d3'; ctx.lineWidth = 2;
   ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 20;
   ctx.beginPath(); ctx.arc(0, 0, EBONY_AREA * .98, 0, Math.PI * 2); ctx.stroke();
   ctx.shadowBlur = 0;
-
-  // Partículas orbitais roxas
   for (let p = 0; p < 18; p++) {
     const pa = tick * .1 + p * (Math.PI * 2 / 18);
     const pd = EBONY_AREA * (.55 + Math.sin(tick * .1 + p) * .32);
@@ -749,8 +1183,6 @@ export function desenharEbonySwirl(
     ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 10;
     ctx.beginPath(); ctx.arc(Math.cos(pa) * pd, Math.sin(pa) * pd, 4, 0, Math.PI * 2); ctx.fill();
   }
-
-  // Faíscas rápidas no anel externo
   for (let s = 0; s < 6; s++) {
     const sa = tick * .2 + s * (Math.PI * 2 / 6);
     const sd = EBONY_AREA * (.92 + Math.sin(tick * .3 + s) * .06);
@@ -759,23 +1191,15 @@ export function desenharEbonySwirl(
     ctx.shadowColor = '#e879f9'; ctx.shadowBlur = 16;
     ctx.beginPath(); ctx.arc(Math.cos(sa) * sd, Math.sin(sa) * sd, 5, 0, Math.PI * 2); ctx.fill();
   }
-
-  // Centro brilhante roxo
   ctx.globalAlpha = alpha * (.7 + .3 * Math.sin(tick * .15));
   const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, 28);
   cg.addColorStop(0, '#faf5ff'); cg.addColorStop(.35, '#d946ef'); cg.addColorStop(1, 'rgba(168,85,247,0)');
   ctx.fillStyle = cg; ctx.shadowColor = '#e879f9'; ctx.shadowBlur = 30;
   ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
   ctx.shadowBlur = 0;
-
   ctx.globalAlpha = 1; ctx.restore();
 }
 
-/**
- * I AM ATOMIC — cutscene épica (X)
- * ESPAÇO PARA IMAGEM DO CID: substitua a seção "// ── IMAGEM CID ──" abaixo.
- * Para usar: passe imgCid (HTMLImageElement) como parâmetro extra e descomente o drawImage.
- */
 export function desenharIAmAtomic(
   ctx: CanvasRenderingContext2D,
   timer: number, tick: number,
@@ -789,12 +1213,9 @@ export function desenharIAmAtomic(
   const alpha   = fadeIn * fadeOut;
 
   ctx.save();
-
-  // ── Fundo escuro ──
   ctx.globalAlpha = alpha * .97;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
 
-  // ── Raios roxos partindo do centro ──
   const cx = W / 2, cy = H * .5;
   const numRaios = 36;
   ctx.globalAlpha = alpha * (.3 + .2 * Math.sin(tick * .12));
@@ -808,7 +1229,6 @@ export function desenharIAmAtomic(
     ctx.stroke();
   }
 
-  // ── Listras horizontais roxo neon (I Am Atomic lines) ──
   const numListras = 22;
   for (let l = 0; l < numListras; l++) {
     const ly = H * .04 + l * (H * .92 / numListras);
@@ -823,7 +1243,6 @@ export function desenharIAmAtomic(
     ctx.beginPath(); ctx.moveTo(lX, ly); ctx.lineTo(lX + lLen, ly); ctx.stroke();
   }
 
-  // ── Listras verticais ──
   const numVert = 12;
   for (let v = 0; v < numVert; v++) {
     const vx = W * .04 + v * (W * .92 / numVert) + Math.sin(tick * .05 + v) * 15;
@@ -836,7 +1255,6 @@ export function desenharIAmAtomic(
     ctx.beginPath(); ctx.moveTo(vx, vY); ctx.lineTo(vx, vY + vH); ctx.stroke();
   }
 
-  // ── Círculo de energia central roxo ──
   const rBase = 65 + Math.sin(tick * .1) * 18;
   const rPhase = prog < .15 ? prog / .15 : prog > .7 ? 1 - (prog - .7) / .3 : 1;
   ctx.globalAlpha = alpha * rPhase;
@@ -847,13 +1265,11 @@ export function desenharIAmAtomic(
   ecG.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = ecG; ctx.beginPath(); ctx.arc(cx, cy, rBase * 3.5, 0, Math.PI * 2); ctx.fill();
 
-  // Núcleo branco
   ctx.globalAlpha = alpha * (.85 + .15 * Math.sin(tick * .2));
   ctx.fillStyle = '#faf5ff'; ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 50;
   ctx.beginPath(); ctx.arc(cx, cy, rBase * .38, 0, Math.PI * 2); ctx.fill();
   ctx.shadowBlur = 0;
 
-  // ── Anel expansivo do blast ──
   if (prog > .22 && prog < .72) {
     const bp = (prog - .22) / .5;
     const bR = bp * Math.max(W, H) * 1.5;
@@ -867,7 +1283,6 @@ export function desenharIAmAtomic(
     ctx.shadowBlur = 0;
   }
 
-  // ── Partículas ──
   ctx.globalAlpha = alpha;
   atomicParticulas.forEach(p => {
     p.x += p.vx; p.y += p.vy; p.vida--;
@@ -886,30 +1301,22 @@ export function desenharIAmAtomic(
     ctx.shadowBlur = 0; ctx.restore();
   });
 
-  // ── IMAGEM DO CID ──
-  // 1. Cria o objeto de imagem e define a URL
-const imgCid = new Image();
-imgCid.src = "https://images8.alphacoders.com/130/1305233.png";
-
-// 2. Descomente o bloco abaixo:
-if (imgCid) {
+  const imgshadow = new Image();
+  imgshadow.src = "https://images8.alphacoders.com/130/1305233.png";
+  if (imgshadow.complete) {
     const iW = 200, iH = 300;
     const iX = W / 2 - iW / 2, iY = H / 2 - iH / 2 - 20;
     ctx.save();
     ctx.globalAlpha = alpha * 0.92;
-    // Aura ao redor da imagem
-    ctx.shadowColor = '#d946ef'; 
-    ctx.shadowBlur = 40;
-    ctx.drawImage(imgCid, iX, iY, iW, iH);
+    ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 40;
+    ctx.drawImage(imgshadow, iX, iY, iW, iH);
     ctx.shadowBlur = 0;
     ctx.restore();
-}
+  }
 
-  // ── Texto "I... Am... Atomic" ──
   const textProg = Math.min(1, timer / 90) * fadeOut;
   ctx.save(); ctx.globalAlpha = textProg;
   ctx.textAlign = 'center';
-
   ctx.font = 'bold 54px serif';
   ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 44 + Math.sin(tick * .12) * 18;
   ctx.fillStyle = '#faf5ff';
@@ -927,19 +1334,15 @@ if (imgCid) {
     ctx.shadowBlur = 0;
   }
 
-  // 🛡 INVULNERÁVEL
   ctx.globalAlpha = alpha * (.7 + .3 * Math.sin(tick * .2));
   ctx.font = 'bold 12px monospace'; ctx.fillStyle = '#f0abfc';
   ctx.shadowColor = '#d946ef'; ctx.shadowBlur = 12;
   ctx.fillText('🛡 INVULNERÁVEL', W / 2, 28); ctx.shadowBlur = 0;
 
   ctx.restore();
-
-  // Barra de progresso
   ctx.globalAlpha = alpha * .5;
   ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(W * .1, H - 10, W * .8, 4);
   ctx.fillStyle = '#d946ef'; ctx.fillRect(W * .1, H - 10, W * .8 * prog, 4);
-
   ctx.globalAlpha = 1; ctx.restore();
 }
 
@@ -955,7 +1358,6 @@ export const HOGYOKU_CD_MAX = 18000;
 
 export type IlusaoEfeito = { x: number; y: number; timer: number; maxTimer: number };
 
-/** Ilusão (clique) — projétil de hipnose */
 export function desenharProjetilIlusao(ctx: CanvasRenderingContext2D, p: { x: number; y: number; vx: number; vy: number; angulo: number; vida: number }) {
   ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angulo);
   const al = Math.min(1, p.vida / 10);
@@ -973,7 +1375,6 @@ export function desenharProjetilIlusao(ctx: CanvasRenderingContext2D, p: { x: nu
   ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.restore();
 }
 
-/** Efeito no alvo quando a ilusão conecta */
 export function desenharIlusaoImpacto(ctx: CanvasRenderingContext2D, ef: IlusaoEfeito) {
   const prog = ef.timer / ef.maxTimer;
   const r = 40 * prog, al = 1 - prog;
@@ -991,51 +1392,35 @@ export function desenharIlusaoImpacto(ctx: CanvasRenderingContext2D, ef: IlusaoE
   ctx.globalAlpha = 1; ctx.restore(); ef.timer++;
 }
 
-/**
- * Kyōka Suigetsu — Hadō #90: Kurohitsugi (Z do Aizen)
- * SEM cutscene de tela cheia. Desenha o caixão negro diretamente no mundo (em coordenadas de câmera).
- * Chame ANTES de ctx.restore() do bloco de câmera — ou passe offsets de câmera.
- * pos: posição MUNDIAL do alvo (cx, cy do grupo de inimigos ou do player como referência)
- */
 export function desenharKyokaSuigetsu(
   ctx: CanvasRenderingContext2D,
   timer: number, tick: number,
   canvasW: number, canvasH: number,
   playerX: number, playerY: number
 ) {
-  // Kurohitsugi: caixão preto com lanças roxas — aparece no centro do canvas (sobre tudo)
   const W = canvasW, H = canvasH;
   const prog = timer / KYOKA_DUR;
-
-  // Aparece gradualmente nos primeiros 30 frames, some nos últimos 40
   const fadeIn  = Math.min(1, timer / 30);
   const fadeOut = timer > KYOKA_DUR - 40 ? Math.max(0, 1 - (timer - (KYOKA_DUR - 40)) / 40) : 1;
   const alpha   = fadeIn * fadeOut;
 
   if (alpha <= 0) return;
 
-  // Pulso de energia ao redor do caixão
   const pulse = 1 + .06 * Math.sin(tick * .18);
-
-  // Dimensões do caixão (em tela, não em mundo)
   const bW = 160 * pulse, bH = 240 * pulse;
   const bX = W / 2 - bW / 2, bY = H * .35 - bH / 2;
   const cx2 = W / 2, cy2 = H * .35;
 
   ctx.save();
-
-  // ── Escurecimento atmosférico ──
   ctx.globalAlpha = alpha * .55;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
 
-  // Gradiente roxo-escuro ao redor
   const bgG = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, Math.max(W, H) * .8);
   bgG.addColorStop(0, 'rgba(76,29,149,.35)');
   bgG.addColorStop(.5, 'rgba(30,0,60,.25)');
   bgG.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.globalAlpha = alpha * .7; ctx.fillStyle = bgG; ctx.fillRect(0, 0, W, H);
 
-  // Partículas de energia gravitacional (flutuando em espiral)
   ctx.globalAlpha = alpha;
   for (let p = 0; p < 24; p++) {
     const pa = tick * .05 + p * (Math.PI * 2 / 24);
@@ -1049,98 +1434,72 @@ export function desenharKyokaSuigetsu(
   }
   ctx.shadowBlur = 0;
 
-  // ── Caixão negro — Kurohitsugi ──
   ctx.globalAlpha = alpha;
-
-  // Sombra / brilho do caixão
   ctx.shadowColor = '#4c1d95'; ctx.shadowBlur = 40 + Math.sin(tick * .1) * 10;
-
-  // Corpo principal preto
   ctx.fillStyle = '#000'; ctx.strokeStyle = '#4c1d95'; ctx.lineWidth = 2.5;
   ctx.beginPath(); ctx.rect(bX, bY, bW, bH); ctx.fill(); ctx.stroke();
 
-  // Grade de energia roxa nas faces do caixão
   ctx.strokeStyle = '#4c1d95'; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .4;
-  // Linhas horizontais
   for (let row = 1; row < 5; row++) {
     const ly2 = bY + (bH / 5) * row;
     ctx.beginPath(); ctx.moveTo(bX, ly2); ctx.lineTo(bX + bW, ly2); ctx.stroke();
   }
-  // Linhas verticais
   for (let col = 1; col < 4; col++) {
     const lx2 = bX + (bW / 4) * col;
     ctx.beginPath(); ctx.moveTo(lx2, bY); ctx.lineTo(lx2, bY + bH); ctx.stroke();
   }
 
-  // Borda luminosa
   ctx.globalAlpha = alpha * (.5 + .3 * Math.sin(tick * .15));
   ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.rect(bX + 3, bY + 3, bW - 6, bH - 6); ctx.stroke();
-
   ctx.shadowBlur = 0;
   ctx.globalAlpha = alpha;
 
-  // ── Lanças (hastes) perfurando o caixão — característico do Kurohitsugi ──
   const hastes = [
-    // [xFrac, yFrac, anguloRad, comprimento, lado: 0=horizontal, 1=vertical]
-    { xf: .5,  yf: 0,    ang: -Math.PI/2,   len: 90,  larg: 8  }, // topo centro
-    { xf: .5,  yf: 1,    ang:  Math.PI/2,   len: 80,  larg: 7  }, // base centro
-    { xf: 0,   yf: .5,   ang:  Math.PI,     len: 75,  larg: 7  }, // esquerda centro
-    { xf: 1,   yf: .5,   ang:  0,           len: 75,  larg: 7  }, // direita centro
-    { xf: .18, yf: .12,  ang: -Math.PI*.75, len: 65,  larg: 5  }, // canto superior esq
-    { xf: .82, yf: .12,  ang: -Math.PI*.25, len: 65,  larg: 5  }, // canto superior dir
-    { xf: .18, yf: .88,  ang:  Math.PI*.75, len: 60,  larg: 5  }, // canto inferior esq
-    { xf: .82, yf: .88,  ang:  Math.PI*.25, len: 60,  larg: 5  }, // canto inferior dir
-    { xf: .5,  yf: .22,  ang: -Math.PI/2,   len: 50,  larg: 4  }, // interno superior
-    { xf: .5,  yf: .78,  ang:  Math.PI/2,   len: 50,  larg: 4  }, // interno inferior
-    { xf: .22, yf: .5,   ang:  Math.PI,     len: 45,  larg: 4  }, // interno esq
-    { xf: .78, yf: .5,   ang:  0,           len: 45,  larg: 4  }, // interno dir
+    { xf: .5,  yf: 0,    ang: -Math.PI/2,   len: 90,  larg: 8  },
+    { xf: .5,  yf: 1,    ang:  Math.PI/2,   len: 80,  larg: 7  },
+    { xf: 0,   yf: .5,   ang:  Math.PI,     len: 75,  larg: 7  },
+    { xf: 1,   yf: .5,   ang:  0,           len: 75,  larg: 7  },
+    { xf: .18, yf: .12,  ang: -Math.PI*.75, len: 65,  larg: 5  },
+    { xf: .82, yf: .12,  ang: -Math.PI*.25, len: 65,  larg: 5  },
+    { xf: .18, yf: .88,  ang:  Math.PI*.75, len: 60,  larg: 5  },
+    { xf: .82, yf: .88,  ang:  Math.PI*.25, len: 60,  larg: 5  },
+    { xf: .5,  yf: .22,  ang: -Math.PI/2,   len: 50,  larg: 4  },
+    { xf: .5,  yf: .78,  ang:  Math.PI/2,   len: 50,  larg: 4  },
+    { xf: .22, yf: .5,   ang:  Math.PI,     len: 45,  larg: 4  },
+    { xf: .78, yf: .5,   ang:  0,           len: 45,  larg: 4  },
   ];
 
   hastes.forEach(h => {
     const hx = bX + bW * h.xf, hy = bY + bH * h.yf;
-    // Animação: as lanças avançam gradualmente
     const hProg = Math.min(1, Math.max(0, (prog * KYOKA_DUR - 15) / 60));
     const hLen = h.len * hProg;
     if (hLen <= 0) return;
-
     ctx.save(); ctx.translate(hx, hy); ctx.rotate(h.ang);
-
-    // Corpo da lança
     ctx.fillStyle = '#1c0540'; ctx.strokeStyle = '#4c1d95'; ctx.lineWidth = 1.5;
     ctx.shadowColor = '#7c3aed'; ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.rect(-h.larg / 2, 0, h.larg, hLen);
-    ctx.fill(); ctx.stroke();
-
-    // Ponta da lança (triângulo afiado)
+    ctx.beginPath(); ctx.rect(-h.larg / 2, 0, h.larg, hLen); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#4c1d95';
-    ctx.beginPath();
-    ctx.moveTo(-h.larg * .8, hLen);
-    ctx.lineTo(h.larg * .8, hLen);
-    ctx.lineTo(0, hLen + h.larg * 1.5);
-    ctx.closePath(); ctx.fill();
-
-    // Brilho na aresta
+    ctx.beginPath(); ctx.moveTo(-h.larg * .8, hLen); ctx.lineTo(h.larg * .8, hLen); ctx.lineTo(0, hLen + h.larg * 1.5); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(-h.larg / 2, 0); ctx.lineTo(-h.larg / 2, hLen); ctx.stroke();
-
     ctx.shadowBlur = 0; ctx.restore();
   });
 
-  // ── Cruzs no topo do caixão ──
   ctx.globalAlpha = alpha * (.8 + .2 * Math.sin(tick * .2));
   ctx.fillStyle = '#2e1065'; ctx.strokeStyle = '#6d28d9'; ctx.lineWidth = 2;
   ctx.shadowColor = '#4c1d95'; ctx.shadowBlur = 14;
-  // Cruz central no topo
   const cSize = 18;
-  ctx.beginPath();
-  ctx.rect(cx2 - cSize * .15, bY - cSize * .7, cSize * .3, cSize * 1.4); ctx.fill(); ctx.stroke();
-  ctx.beginPath();
-  ctx.rect(cx2 - cSize * .7, bY - cSize * .15, cSize * 1.4, cSize * .3); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(cx2 - cSize * .15, bY - cSize * .7, cSize * .3, cSize * 1.4); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(cx2 - cSize * .7, bY - cSize * .15, cSize * 1.4, cSize * .3); ctx.fill(); ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // ── Texto do Kidō ──
+  // ── INVULNERÁVEL durante Kyōka Suigetsu ──
+  ctx.globalAlpha = alpha * (.7 + .3 * Math.sin(tick * .2));
+  ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#fde68a'; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12;
+  ctx.fillText('🛡 INVULNERÁVEL', W / 2, 28); ctx.shadowBlur = 0;
+
   const tAlpha = Math.min(1, timer / 25) * fadeOut;
   ctx.save(); ctx.globalAlpha = tAlpha * .9; ctx.textAlign = 'center';
   ctx.font = 'bold 13px monospace'; ctx.fillStyle = '#7c3aed';
@@ -1150,7 +1509,6 @@ export function desenharKyokaSuigetsu(
   ctx.fillText('Hadō #90  ·  Kurohitsugi', cx2, bY - 12);
   ctx.shadowBlur = 0; ctx.restore();
 
-  // ── Barra de duração ──
   ctx.globalAlpha = alpha * .4;
   ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(W * .35, H - 8, W * .3, 3);
   ctx.fillStyle = '#7c3aed'; ctx.fillRect(W * .35, H - 8, W * .3 * prog, 3);
@@ -1158,11 +1516,6 @@ export function desenharKyokaSuigetsu(
   ctx.globalAlpha = 1; ctx.restore();
 }
 
-/**
- * Hōgyoku Fusion — Ultimate X do Aizen
- * ESPAÇO PARA IMAGEM DO AIZEN: substitua a seção "// ── IMAGEM AIZEN ──" abaixo.
- * Para usar: passe imgAizen (HTMLImageElement) como parâmetro extra e descomente o drawImage.
- */
 export function desenharHogyokuFusion(
   ctx: CanvasRenderingContext2D,
   timer: number, tick: number,
@@ -1176,8 +1529,6 @@ export function desenharHogyokuFusion(
   const alpha   = fadeIn * fadeOut;
 
   ctx.save();
-
-  // ── Fundo escuro com gradiente dourado-roxo ──
   ctx.globalAlpha = alpha * .96;
   ctx.fillStyle = '#08000f'; ctx.fillRect(0, 0, W, H);
   const bgG2 = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, H * .9);
@@ -1187,8 +1538,6 @@ export function desenharHogyokuFusion(
   ctx.fillStyle = bgG2; ctx.fillRect(0, 0, W, H);
 
   ctx.globalAlpha = alpha;
-
-  // ── Partículas ──
   const pcors = ['#fbbf24', '#a855f7', '#f59e0b', '#c084fc', '#fff'];
   hogyokuParticulas.forEach(p => {
     p.x += p.vx; p.y += p.vy; p.vida--;
@@ -1206,7 +1555,6 @@ export function desenharHogyokuFusion(
     ctx.shadowBlur = 0; ctx.restore();
   });
 
-  // ── Hōgyoku (orbe no centro) ──
   const ax2 = W / 2, ay2 = H / 2;
   const orbR = 24 + Math.sin(tick * .1) * 5;
 
@@ -1229,7 +1577,6 @@ export function desenharHogyokuFusion(
   ctx.beginPath(); ctx.arc(ax2, ay2, orbR, 0, Math.PI * 2); ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Olho no interior
   ctx.globalAlpha = alpha * .9;
   ctx.fillStyle = '#4c1d95';
   ctx.beginPath(); ctx.ellipse(ax2, ay2, orbR * .6, orbR * .35, 0, 0, Math.PI * 2); ctx.fill();
@@ -1248,35 +1595,25 @@ export function desenharHogyokuFusion(
     ctx.beginPath(); ctx.ellipse(ax2, ay2, rr, rr * .55, ra2, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // ── IMAGEM DO AIZEN ──
-// 1. Cria o objeto de imagem e define a URL
-const imgAizen = new Image();
-imgAizen.src = "https://i.redd.it/bia059noqgq41.jpg";
-
-// 2. Bloco de desenho da imagem
-if (imgAizen) {
+  const imgAizen = new Image();
+  imgAizen.src = "https://i.redd.it/bia059noqgq41.jpg";
+  if (imgAizen.complete) {
     const iW = 200, iH = 300;
-    const iX = W * 0.28 - iW / 2;  // Lado esquerdo
+    const iX = W * 0.28 - iW / 2;
     const iY = H / 2 - iH / 2;
-    
     ctx.save();
     ctx.globalAlpha = alpha * 0.92;
-    // Aura amarela/dourada ao redor da imagem
-    ctx.shadowColor = '#fbbf24'; 
-    ctx.shadowBlur = 35;
+    ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 35;
     ctx.drawImage(imgAizen, iX, iY, iW, iH);
     ctx.shadowBlur = 0;
     ctx.restore();
-}
+  }
 
-  // ── Texto "Yokoso Watashi no Soul Society" ──
   const tp2 = Math.min(1, timer / 50) * fadeOut;
   ctx.save(); ctx.globalAlpha = tp2; ctx.textAlign = 'center';
-
   ctx.font = 'bold 20px serif'; ctx.fillStyle = '#fde68a';
   ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 24;
   ctx.fillText('ようこそ私のSoul Society', W / 2, H * .11);
-
   ctx.font = 'bold 30px serif'; ctx.fillStyle = '#fff'; ctx.shadowBlur = 18;
   ctx.fillText('Yokoso Watashi no Soul Society', W / 2, H * .11 + 40);
 
@@ -1286,7 +1623,6 @@ if (imgAizen) {
     ctx.font = 'italic 13px monospace'; ctx.fillStyle = '#fbbf24'; ctx.shadowBlur = 10;
     ctx.fillText('"Desde o início, nenhum de vocês teve chance de me derrotar."', W / 2, H * .11 + 68);
   }
-
   ctx.shadowBlur = 0; ctx.restore();
 
   if (hogyokuKilled && timer > HOGYOKU_DUR / 2) {
@@ -1298,7 +1634,6 @@ if (imgAizen) {
     ctx.shadowBlur = 0; ctx.restore();
   }
 
-  // 🛡 INVULNERÁVEL
   ctx.globalAlpha = alpha * (.7 + .3 * Math.sin(tick * .2));
   ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
   ctx.fillStyle = '#fde68a'; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12;

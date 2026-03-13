@@ -128,7 +128,7 @@ function ConteudoCostumizacao() {
       {/* Fundo */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center opacity-40 grayscale-[50%]"
-        style={{ backgroundImage: "url('https://i.pinimg.com/736x/09/9d/89/099d897998e65891b09e81c3d82dd835.jpg')" }} 
+        style={{ backgroundImage: "url('https://img.freepik.com/fotos-premium/velocidade-da-luz-redemoinho-de-vortice-neon-linhas-torcidas-brilhantes-em-movimento-hiper-salto-para-outra-galaxia_35672-1767.jpg')" }} 
       />
       {/* Overlay de cor dinâmica */}
       <div
