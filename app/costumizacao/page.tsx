@@ -14,7 +14,7 @@ type Classe = {
 const CLASSES: Classe[] = [
   { 
     id: 'guerreiro', nome: 'SUKUNA', 
-    descricao: 'REI das maldiçōes, um guerreiro que devora seus inimigos para aumentar seu poder.',
+    descricao: 'FUKUMA MIZUSHI...',
     imagem: '👑', 
     atributos: { str: 10, agi: 4, int: 2, vit: 9 } 
   },
@@ -26,7 +26,7 @@ const CLASSES: Classe[] = [
   },
   { 
     id: 'sombrio', nome: 'Sung Jin-Woo', 
-    descricao: 'Uma sombra que corta a garganta dos reis antes do amanhecer.',
+    descricao: 'ARISE SHADOW LEGION...',
     imagem: '💀', 
     atributos: { str: 5, agi: 10, int: 5, vit: 3 } 
   },
@@ -128,7 +128,7 @@ function ConteudoCostumizacao() {
             <div className="absolute top-8 w-full px-8">
               <input 
                 type="text" 
-                placeholder="NOME DO HERÓI..."
+                placeholder="NOME DO PERSONAGEM..."
                 value={nome}
                 onChange={(e) => setNome(e.target.value.toUpperCase())}
                 className="w-full bg-transparent border-b-2 border-red-900 focus:border-red-500 outline-none text-center text-xl font-bold text-white placeholder:text-red-900/50 transition-all"
