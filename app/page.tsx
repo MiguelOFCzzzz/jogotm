@@ -4,6 +4,23 @@ import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useRouter } from 'next/navigation';
 
+// Mapa de cor por classe (sincronizado com costumização)
+const COR_CLASSE: Record<string, string> = {
+  guerreiro: '#ef4444',
+  mago:      '#a855f7',
+  sombrio:   '#6366f1',
+  shadow:    '#22d3ee',
+  aizen:     '#fbbf24',
+};
+
+const NOME_CLASSE: Record<string, string> = {
+  guerreiro: 'Sukuna',
+  mago:      'Gojo',
+  sombrio:   'Jin-Woo',
+  shadow:    'Shadow',
+  aizen:     'Aizen',
+};
+
 export default function RpgLobby() {
   const router = useRouter();
 
@@ -16,20 +33,16 @@ export default function RpgLobby() {
   const [jogadores, setJogadores] = useState<string[]>([]);
   const [isHost, setIsHost] = useState(false);
 
-  // ESTADO PARA MEMÓRIA DO HERÓI
   const [heroiSalvo, setHeroiSalvo] = useState<{nome: string, sala: string} | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // --- LÓGICA DE MEMÓRIA (Sincronizada com o novo padrão) ---
-    const nomeSalvo = localStorage.getItem('glory_dark_char_nome');
-    const salaSalva = localStorage.getItem('glory_dark_last_sala');
-    if (nomeSalvo && salaSalva) {
-      setHeroiSalvo({ nome: nomeSalvo, sala: salaSalva });
-    }
+    const nomeSalvo  = localStorage.getItem('glory_dark_char_nome');
+    const salaSalva  = localStorage.getItem('glory_dark_last_sala');
+    if (nomeSalvo && salaSalva) setHeroiSalvo({ nome: nomeSalvo, sala: salaSalva });
 
-    socketRef.current = io('http://localhost:3001'); 
+    socketRef.current = io('http://localhost:3001');
 
     socketRef.current.on('sala_criada', (codigo) => {
       setCodigoSala(codigo);
@@ -45,31 +58,24 @@ export default function RpgLobby() {
       setIsHost(false);
     });
 
-    socketRef.current.on('atualizar_jogadores', (novaLista) => {
-      setJogadores(novaLista);
-    });
+    socketRef.current.on('atualizar_jogadores', (novaLista) => setJogadores(novaLista));
 
-    // MUDANÇA PARA "COSTUMIZACAO"
     socketRef.current.on('iniciar_costumizacao', (dados) => {
       const codigoFinal = dados?.codigoSala || codigoSala;
       router.push(`/costumizacao?sala=${codigoFinal || "TESTE1"}`);
     });
 
-    socketRef.current.on('erro', (msg) => {
-      alert(msg);
-    });
+    socketRef.current.on('erro', (msg) => alert(msg));
 
-    return () => {
-      socketRef.current?.disconnect();
-    };
+    return () => { socketRef.current?.disconnect(); };
   }, [nome, router, codigoSala]);
 
   const criarSala = () => {
     if (!nome) return alert('Diga seu nome, viajante!');
-    setTela('lobby'); 
+    setTela('lobby');
     setIsHost(true);
     setJogadores([nome]);
-    setCodigoSala("GERANDO..."); 
+    setCodigoSala("GERANDO...");
     socketRef.current?.emit('criar_sala', { nome, limite: limiteJogadores });
   };
 
@@ -83,12 +89,18 @@ export default function RpgLobby() {
     socketRef.current?.emit('comecar_jogo', { codigo: codigoSala });
   };
 
-  // FUNÇÃO PARA RETOMAR
   const retomarJornada = () => {
-    if (heroiSalvo) {
-      router.push(`/game?sala=${heroiSalvo.sala}`);
-    }
+    if (heroiSalvo) router.push(`/game?sala=${heroiSalvo.sala}`);
   };
+
+  // 5 classes disponíveis para exibição no lobby
+  const PREVIEW_CLASSES = [
+    { id: 'guerreiro', emoji: '👑', nome: 'SUKUNA' },
+    { id: 'mago',      emoji: '🤞', nome: 'GOJO'   },
+    { id: 'sombrio',   emoji: '💀', nome: 'JIN-WOO'},
+    { id: 'shadow',    emoji: '🌑', nome: 'SHADOW', mitico: true },
+    { id: 'aizen',     emoji: '🪞', nome: 'AIZEN',  mitico: true },
+  ];
 
   return (
     <main className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-black font-serif">
@@ -96,13 +108,25 @@ export default function RpgLobby() {
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60"
         style={{ backgroundImage: "url('https://i.pinimg.com/736x/09/9d/89/099d897998e65891b09e81c3d82dd835.jpg')" }} 
       />
-      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-900/20 to-black/90"></div>
+      <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-900/20 to-black/90" />
 
       <div className="relative z-20 w-full max-w-xl px-4 animate-in fade-in zoom-in duration-700">
         <div className="text-center mb-8">
           <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-white drop-shadow-[0_0_20px_rgba(239,68,68,0.4)]">
             GLORY <span className="text-red-500">DARK</span>
           </h1>
+          {/* Preview das 5 classes */}
+          <div className="flex justify-center gap-3 mt-4">
+            {PREVIEW_CLASSES.map(c => (
+              <div key={c.id} className="flex flex-col items-center gap-1 group cursor-default">
+                <span className="text-2xl grayscale group-hover:grayscale-0 transition-all">{c.emoji}</span>
+                <span className="text-[8px] font-bold uppercase tracking-wider"
+                  style={{ color: COR_CLASSE[c.id] + (c.mitico ? 'ff' : '99') }}>
+                  {c.mitico ? '★ ' : ''}{c.nome}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="bg-zinc-900/90 border-2 border-red-900/50 rounded-xl shadow-[0_0_50px_rgba(127,29,29,0.3)] overflow-hidden">
@@ -173,7 +197,6 @@ export default function RpgLobby() {
                 <button 
                   onClick={() => {
                     const codigoFinal = (codigoSala === "GERANDO..." || !codigoSala) ? "TESTE1" : codigoSala;
-                    // MUDANÇA PARA "COSTUMIZACAO"
                     router.push(`/costumizacao?sala=${codigoFinal}`);
                   }} 
                   className="text-[10px] text-zinc-600 hover:text-red-500 transition-colors uppercase tracking-widest cursor-pointer"
@@ -182,7 +205,9 @@ export default function RpgLobby() {
                 </button>
 
                 <div className="space-y-3 text-left">
-                  <p className="text-[10px] font-bold text-red-500 uppercase border-b border-red-900/40 pb-1">Viajantes ({jogadores.length})</p>
+                  <p className="text-[10px] font-bold text-red-500 uppercase border-b border-red-900/40 pb-1">
+                    Viajantes ({jogadores.length})
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {jogadores.map((jog, i) => (
                       <div key={i} className="bg-red-950/20 border border-red-900/30 p-2 rounded text-sm text-red-100 flex items-center gap-2">
