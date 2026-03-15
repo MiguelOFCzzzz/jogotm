@@ -25,6 +25,7 @@ import {
   FUR_ALCANCE, FUR_DUR, RYO_DUR, RYO_SLASH_INT,
   RYOIKI_DELAY, ARISE_DUR, INVOC_DUR, INVOC_KILL_T,
 } from './helpers-draw';
+import { precarregarAudios, tocarUltimate, pararAudio } from './audio-manager';
 
 const WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 
@@ -51,6 +52,12 @@ export default function Jogo2D() {
     const classe = (raw === 'mago' || raw === 'sombrio' || raw === 'shadow' || raw === 'aizen') ? raw : 'guerreiro';
     return { nome: typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_char_nome') || 'Herói') : 'Herói', classe, str:10, agi:10, int:10, vit:10, hpMax:200 };
   });
+  
+
+    useEffect(() => {
+  precarregarAudios();
+}, []);
+
 
   const LINKS: Record<string,string> = {
     guerreiro: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/46a9374d-e7fd-4bca-9214-7e3976a050d0/dgfzl3p-11e8a47e-8122-4792-80d4-27f9b491ce2f.png/v1/fill/w_800,h_999/sukuna_png_by_vortexkun_dgfzl3p-pre.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MTM1MCIsInBhdGgiOiIvZi80NmE5Mzc0ZC1lN2ZkLTRiY2EtOTIxNC03ZTM5NzZhMDUwZDAvZGdmemwzcC0xMWU4YTQ3ZS04MTIyLTQ3OTItODBkNC0yN2Y5YjQ5MWNlMmYucG5nIiwid2lkdGgiOiI8PTEwODAifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6aW1hZ2Uub3BlcmF0aW9ucyJdfQ.vLzUOZUOZgaduP0pKUxjxW_nsjgXnKVAx5JjHjt5P3M',
@@ -100,6 +107,9 @@ export default function Jogo2D() {
     const ctx    = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     const cl = status.classe;
+
+    // Pré-carrega todos os áudios em background
+ 
 
     // ── Estado do jogo ──
     const projectiles: Projetil[] = [];
@@ -179,7 +189,7 @@ export default function Jogo2D() {
     let hogyokuAtivo = false, hogyokuTimer = 0, hogyokuCooldown = 0, hogyokuKilled = false;
     let hogyokuParticulas: { x:number; y:number; vx:number; vy:number; vida:number; r:number; cor:string }[] = [];
 
-    // ── POÇÕES ──────────────────────────────────────────────────────────────────
+    // ── POÇÕES ──
     let pocoes: Pocao[] = [];
     let pocaoIdCounter = 0;
     const POCAO_CURA_BASE = 40;
@@ -225,9 +235,7 @@ export default function Jogo2D() {
     }
 
     function gerarOnda(onda: number): Monstro[] {
-      // Gera poções ao iniciar a onda
       gerarPocoesDaOnda(onda);
-
       if (onda === 20) return [{
         id:9999, x:WORLD_WIDTH/2, y:WORLD_HEIGHT/2, hp:22000, maxHp:22000, size:320,
         cor:'#040008', corVariante:'#010003', corBrilho:'#ff00cc', corOlho:'#ff88ff',
@@ -305,13 +313,9 @@ export default function Jogo2D() {
       if(sombrasFila.length<MAX_SOMBRAS) sombrasFila.push({ tipo:m.tipo, size:m.size, maxHp:m.maxHp, ordemMorte:contadorMorte });
     }
 
-    // ════════════════════════════════════════════════════════════
-    // RENDER LOOP
-    // ════════════════════════════════════════════════════════════
     const render = () => {
       tick++;
 
-      // ── Fim de jogo ──
       if(estadoJogo !== 'jogando'){
         ctx.fillStyle='rgba(0,0,0,.85)'; ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.textAlign='center';
@@ -322,7 +326,6 @@ export default function Jogo2D() {
         animId=requestAnimationFrame(render); return;
       }
 
-      // ── Transição de onda ──
       if(ryoikiLimpouOnda){
         ryoikiDelayTimer++;
         desenharTransicaoOnda(ctx, ryoikiDelayTimer, ondaAtual, canvas.width, canvas.height);
@@ -334,7 +337,7 @@ export default function Jogo2D() {
         animId=requestAnimationFrame(render); return;
       }
 
-      // ── Movimento do player ──
+      // ── Movimento ──
       let dx=0, dy=0;
       if(teclas['w'])dy=-1; if(teclas['s'])dy=1; if(teclas['a'])dx=-1; if(teclas['d'])dx=1;
       if(dx||dy){
@@ -404,12 +407,18 @@ export default function Jogo2D() {
         if(hollowCooldown>0) hollowCooldown--;
         if(teclas['x']&&ryoikiMagoCooldown<=0&&!ryoikiMagoAtivo){
           ryoikiMagoAtivo=true; ryoikiMagoTimer=0; ryoikiMagoKilled=false; floatingInfos=[];
+          // ── ÁUDIO: Mago ultimate ──
+          tocarUltimate('mago');
           for(let fi=0;fi<120;fi++) floatingInfos.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vy:-(0.3+Math.random()*0.8),alpha:Math.random()*0.7+0.2,txt:infoTexts[Math.floor(Math.random()*infoTexts.length)],color:['#fff','#e879f9','#a78bfa','#c084fc','#f0abfc','#ddd6fe'][Math.floor(Math.random()*6)]});
         }
         if(ryoikiMagoAtivo){
           ryoikiMagoTimer++;
           if(ryoikiMagoTimer>=RYOIKI_M_KILL_T&&!ryoikiMagoKilled){monstros.length=0;ryoikiMagoKilled=true;}
-          if(ryoikiMagoTimer>=RYOIKI_M_DUR){ryoikiMagoAtivo=false;ryoikiMagoCooldown=RYOIKI_M_CD_MAX;floatingInfos=[];}
+          if(ryoikiMagoTimer>=RYOIKI_M_DUR){
+            ryoikiMagoAtivo=false; ryoikiMagoCooldown=RYOIKI_M_CD_MAX; floatingInfos=[];
+            // ── ÁUDIO: para com fade ──
+            //pararAudio();
+          }
         }
         if(ryoikiMagoCooldown>0) ryoikiMagoCooldown--;
       }
@@ -425,13 +434,20 @@ export default function Jogo2D() {
         if(furacaoCooldown>0) furacaoCooldown--;
         if(teclas['x']&&ryoikiCooldown<=0&&!ryoikiAtivo&&!ryoikiLimpouOnda){
           ryoikiAtivo=true; ryoikiTimer=0; ryoikiCooldown=RYO_CD_MAX; slashesDomain=[];
+          // ── ÁUDIO: Guerreiro ultimate ──
+          tocarUltimate('guerreiro');
           socketRef.current?.emit('habilidade_z',{tipo:'ryoiki'});
         }
         if(ryoikiAtivo){
           ryoikiTimer++;
           monstros.forEach(m=>{m.hp-=(m.hp+m.maxHp)/RYO_DUR+5;m.hitTimer=3;});
           for(let i=monstros.length-1;i>=0;i--){if(monstros[i].hp<=0)monstros.splice(i,1);}
-          if(ryoikiTimer>=RYO_DUR){monstros.length=0;ryoikiAtivo=false;slashesDomain=[];ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+          if(ryoikiTimer>=RYO_DUR){
+            monstros.length=0; ryoikiAtivo=false; slashesDomain=[];
+            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
+            // ── ÁUDIO: para com fade ──
+            pararAudio();
+          }
         }
         if(ryoikiCooldown>0) ryoikiCooldown--;
       }
@@ -463,13 +479,20 @@ export default function Jogo2D() {
         if(ressurrCooldown>0) ressurrCooldown--;
         if(teclas['x']&&invocCooldown<=0&&!invocAtivo&&!ariseAtivo){
           invocAtivo=true; invocTimer=0; invocKilled=false;
+          // ── ÁUDIO: Sombrio ultimate ──
+          tocarUltimate('sombrio');
           invocParticulas=Array.from({length:80},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-0.5)*1.2,vy:-(1+Math.random()*3),vida:60+Math.random()*100,r:1.5+Math.random()*4,cor:['#7c3aed','#a855f7','#c084fc','#e879f9','#581c87'][Math.floor(Math.random()*5)]}));
           socketRef.current?.emit('habilidade_z',{tipo:'invocacao_ultimate'});
         }
         if(invocAtivo){
           invocTimer++;
           if(invocTimer>=INVOC_KILL_T&&!invocKilled){monstros.forEach(m=>{for(let ex=0;ex<3;ex++)explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40});});monstros.length=0;invocKilled=true;}
-          if(invocTimer>=INVOC_DUR){invocAtivo=false;invocParticulas=[];invocCooldown=INVOC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+          if(invocTimer>=INVOC_DUR){
+            invocAtivo=false; invocParticulas=[]; invocCooldown=INVOC_CD_MAX;
+            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
+            // ── ÁUDIO: para com fade ──
+            pararAudio();
+          }
         }
         if(invocCooldown>0) invocCooldown--;
         aliados=aliados.filter(a=>{
@@ -514,12 +537,19 @@ export default function Jogo2D() {
         if(ebonyCooldown>0) ebonyCooldown--;
         if(teclas['x']&&atomicCooldown<=0&&!atomicAtivo){
           atomicAtivo=true; atomicTimer=0;
+          // ── ÁUDIO: Shadow ultimate ──
+          tocarUltimate('shadow');
           atomicParticulas=Array.from({length:80},()=>{const a=Math.random()*Math.PI*2,v=2+Math.random()*7;return{x:player.x+40,y:player.y+40,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vida:30+Math.random()*60,r:2+Math.random()*5};});
         }
         if(atomicAtivo){
           atomicTimer++;
           if(atomicTimer===80){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;}
-          if(atomicTimer>=ATOMIC_DUR){atomicAtivo=false;atomicCooldown=ATOMIC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+          if(atomicTimer>=ATOMIC_DUR){
+            atomicAtivo=false; atomicCooldown=ATOMIC_CD_MAX;
+            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
+            // ── ÁUDIO: para com fade ──
+            pararAudio();
+          }
         }
         if(atomicCooldown>0) atomicCooldown--;
       }
@@ -534,24 +564,39 @@ export default function Jogo2D() {
         } else if(redClickPendente&&ilusaoCooldown>0) redClickPendente=null;
         if(ilusaoCooldown>0) ilusaoCooldown--;
 
-        // Z = Kyōka Suigetsu — INVENCÍVEL durante a duração
-        if(teclas['z']&&kyokaCooldown<=0&&!kyokaAtivo){kyokaAtivo=true;kyokaTimer=0;kyokaCooldown=KYOKA_CD_MAX;}
+        // Z = Kyōka Suigetsu — INVENCÍVEL + ÁUDIO
+        if(teclas['z']&&kyokaCooldown<=0&&!kyokaAtivo){
+          kyokaAtivo=true; kyokaTimer=0; kyokaCooldown=KYOKA_CD_MAX;
+          // ── ÁUDIO: Aizen Z ──
+          tocarUltimate('aizen');
+        }
         if(kyokaAtivo){
           kyokaTimer++;
           if(kyokaTimer%20===0){monstros.forEach(m=>{const ri=Math.floor(Math.random()*monstros.length);if(monstros[ri]&&monstros[ri]!==m){monstros[ri].hp-=15+status.int;monstros[ri].hitTimer=8;}});}
-          if(kyokaTimer>=KYOKA_DUR) kyokaAtivo=false;
+          if(kyokaTimer>=KYOKA_DUR){
+            kyokaAtivo=false;
+            // ── ÁUDIO: para com fade ──
+            pararAudio();
+          }
         }
         if(kyokaCooldown>0) kyokaCooldown--;
         ilusaoParticulas=ilusaoParticulas.filter(ef=>{desenharIlusaoImpacto(ctx,ef);return ef.timer<ef.maxTimer;});
 
         if(teclas['x']&&hogyokuCooldown<=0&&!hogyokuAtivo){
           hogyokuAtivo=true; hogyokuTimer=0; hogyokuKilled=false;
+          // ── ÁUDIO: Aizen X (mesmo áudio) ──
+          tocarUltimate('aizen');
           hogyokuParticulas=Array.from({length:80},()=>{const a=Math.random()*Math.PI*2,v=1.5+Math.random()*5;return{x:canvasRef.current!.width/2,y:canvasRef.current!.height/2,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vida:40+Math.random()*80,r:1.5+Math.random()*4,cor:'#fbbf24'};});
         }
         if(hogyokuAtivo){
           hogyokuTimer++;
           if(hogyokuTimer===Math.floor(HOGYOKU_DUR*.45)&&!hogyokuKilled){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;hogyokuKilled=true;}
-          if(hogyokuTimer>=HOGYOKU_DUR){hogyokuAtivo=false;hogyokuCooldown=HOGYOKU_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+          if(hogyokuTimer>=HOGYOKU_DUR){
+            hogyokuAtivo=false; hogyokuCooldown=HOGYOKU_CD_MAX;
+            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
+            // ── ÁUDIO: para com fade ──
+            pararAudio();
+          }
         }
         if(hogyokuCooldown>0) hogyokuCooldown--;
       }
@@ -570,13 +615,10 @@ export default function Jogo2D() {
       ctx.save();
       ctx.translate(-camera.x,-camera.y);
 
-      // ══ CENÁRIO ÉPICO TOP-DOWN ══
       desenharCenarioEpico(ctx, WORLD_WIDTH, WORLD_HEIGHT, tick);
 
-      // ── Jogadores remotos (marcação azul) ──
       Object.values(remotosRef.current).forEach(jr => desenharJogadorRemoto(ctx, jr, {guerreiro:imgGuerreiro,mago:imgMago,sombrio:imgSombrio,aizen:imgAizen,shadow:imgShadow}, tick));
 
-      // ── Poções ──
       pocoes = pocoes.filter(p => {
         p.pulso += 0.06;
         desenharPocao(ctx, p);
@@ -590,13 +632,11 @@ export default function Jogo2D() {
         return true;
       });
 
-      // ── Invulnerabilidade ──
-      // Aizen: kyokaAtivo = invencível (Z) | hogyokuAtivo = invencível (X)
       const estaInvulneravel =
         (cl==='mago'    && ryoikiMagoAtivo) ||
         (cl==='sombrio' && invocAtivo)      ||
         (cl==='shadow'  && atomicAtivo)     ||
-        (cl==='aizen'   && (hogyokuAtivo || kyokaAtivo)); // ← Z do Aizen agora inclui invencibilidade
+        (cl==='aizen'   && (hogyokuAtivo || kyokaAtivo));
 
       const pcx=player.x+40, pcy=player.y+40;
       const monstrosParaRemover: number[] = [];
@@ -640,7 +680,6 @@ export default function Jogo2D() {
       });
       for(let i=monstrosParaRemover.length-1;i>=0;i--) monstros.splice(monstrosParaRemover[i],1);
 
-      // ── Raios boss final ──
       raioBossArr=raioBossArr.filter(rb=>{
         rb.vida--; rb.homingTimer++;
         if(rb.homingTimer>=10){rb.homingTimer=0;let diff=Math.atan2(pcy-rb.y,pcx-rb.x)-rb.angulo;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;rb.angulo+=diff*.22;rb.vx=Math.cos(rb.angulo)*RAIO_BOSS_VEL;rb.vy=Math.sin(rb.angulo)*RAIO_BOSS_VEL;}
@@ -657,7 +696,6 @@ export default function Jogo2D() {
         ctx.globalAlpha=1; ctx.restore(); return true;
       });
 
-      // ── Projéteis inimigos ──
       projetilInimigos=projetilInimigos.filter(p=>{
         p.vida--; p.x+=p.vx; p.y+=p.vy;
         if(p.vida<=0||p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)return false;
@@ -666,7 +704,6 @@ export default function Jogo2D() {
         return true;
       });
 
-      // ── Projéteis aliados ──
       projetiisAliados=projetiisAliados.filter(p=>{
         p.vida--; p.x+=p.vx; p.y+=p.vy;
         if(p.vida<=0||p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)return false;
@@ -676,11 +713,9 @@ export default function Jogo2D() {
         return !hit;
       });
 
-      // ── Projéteis do player ──
       for(let i=projectiles.length-1;i>=0;i--){
         const p=projectiles[i]; p.x+=p.vx; p.y+=p.vy;
         if(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT){projectiles.splice(i,1);continue;}
-
         if(p.tipo==='guerreiro'){
           desenharProjetilGuerreiro(ctx,p);
           for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+16){m.hp-=p.dano;m.hitTimer=8;explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});projectiles.splice(i,1);break;}}
@@ -727,8 +762,6 @@ export default function Jogo2D() {
       }
 
       explosoesArea=explosoesArea.filter(ex=>{desenharExplosaoArea(ctx,ex);return ex.timer<ex.maxTimer;});
-
-      // Explosões Red
       redExplosoes.forEach(ex=>{
         const prog=ex.timer/ex.maxTimer,r1=RED_RAIO_EXPLO*prog,r2=r1*0.4;
         ctx.save();ctx.globalAlpha=(1-prog)*0.7;ctx.strokeStyle='#ff4400';ctx.lineWidth=3*(1-prog)+1;ctx.shadowColor='#ff2200';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(ex.x,ex.y,r1,0,Math.PI*2);ctx.stroke();
@@ -747,13 +780,10 @@ export default function Jogo2D() {
       if(furacaoAtivo&&cl==='guerreiro')desenharFuracao(ctx,player.x,player.y,furacaoAngulo,furacaoTimer,imgArmaGuerr);
       aliados.forEach(a=>desenharAliado(ctx,a,tick));
       if(cl==='sombrio'&&corte.ativo){corte.timer++;desenharCorteSombrio(ctx,player.x,player.y,corte.anguloBase,corte.timer,corte.duracao);if(corte.timer>=corte.duracao)corte.ativo=false;}
-
       if(cl==='shadow'){
         if(shadowSlashAtivo) desenharShadowSlash(ctx,player.x,player.y,shadowSlashAngulo,shadowSlashTimer,SHADOW_SLASH_DUR);
         if(ebonyAtivo) desenharEbonySwirl(ctx,player.x,player.y,tick,ebonyTimer);
       }
-
-      // Hollow Purple — esferas
       if(cl==='mago'&&hollowFase==='carregando'){
         const eb=hollowEsferaAzul;
         ctx.save();ctx.globalAlpha=eb.alpha;ctx.shadowColor='#3b82f6';ctx.shadowBlur=35;
@@ -763,13 +793,10 @@ export default function Jogo2D() {
         ctx.save();ctx.globalAlpha=Math.min(eb.alpha,ev.alpha)*0.45;ctx.strokeStyle='#e879f9';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.shadowColor='#e879f9';ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(eb.x,eb.y);ctx.lineTo(ev.x,ev.y);ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();
       }
 
-      // ── Marcação do jogador principal (verde pulsante) ──
       desenharMarcacaoJogador(ctx, player.x, player.y, player.size, '#22c55e', tick, status.nome);
-
       if(imgPlayer)ctx.drawImage(imgPlayer,player.x,player.y,player.size,player.size);
       else{ctx.fillStyle=player.color;ctx.fillRect(player.x,player.y,player.size,player.size);}
 
-      // Escudo de invulnerabilidade
       if(estaInvulneravel){
         ctx.save();ctx.globalAlpha=0.35+0.25*Math.sin(tick*0.2);
         const shieldG=ctx.createRadialGradient(pcx,pcy,0,pcx,pcy,60);shieldG.addColorStop(0,'rgba(168,85,247,0)');shieldG.addColorStop(.6,'rgba(168,85,247,0.3)');shieldG.addColorStop(1,'rgba(232,121,249,0.7)');
@@ -779,9 +806,8 @@ export default function Jogo2D() {
 
       ctx.restore(); // fim câmera
 
-      // ════ CUTSCENES (fora da câmera) ════
+      // ════ CUTSCENES ════
       if(ryoikiAtivo&&cl==='guerreiro') desenharRyoikiTenkai(ctx,ryoikiTimer,tick,canvas.width,canvas.height,slashesDomain,ondaAtual);
-
       if(ryoikiMagoAtivo&&cl==='mago'){
         const fadeIn=Math.min(1,ryoikiMagoTimer/50),fadeOut=ryoikiMagoTimer>RYOIKI_M_DUR-60?Math.max(0,1-(ryoikiMagoTimer-(RYOIKI_M_DUR-60))/60):1,alpha=fadeIn*fadeOut;
         const cx2=canvas.width/2,cy2=canvas.height/2;
@@ -793,7 +819,6 @@ export default function Jogo2D() {
         if(ryoikiMagoKilled){const kFade=Math.min(1,(ryoikiMagoTimer-RYOIKI_M_KILL_T)/30)*fadeOut;ctx.save();ctx.globalAlpha=kFade;ctx.textAlign='center';ctx.font='bold 14px monospace';ctx.fillStyle='#fae8ff';ctx.shadowColor='#e879f9';ctx.shadowBlur=18;ctx.fillText('— Todos os alvos: paralisados. —',cx2,canvas.height-38);ctx.shadowBlur=0;ctx.restore();}
         ctx.globalAlpha=1;ctx.restore();
       }
-
       if(ariseAtivo&&cl==='sombrio') desenharAriseCutscene(ctx,ariseTimer,tick,canvas.width,canvas.height,ariseParticulas,ariseAliados);
       if(invocAtivo&&cl==='sombrio') desenharInvocacaoUltimate(ctx,invocTimer,tick,canvas.width,canvas.height,invocParticulas,invocKilled,igrisPos,beruPos);
       if(atomicAtivo&&cl==='shadow') desenharIAmAtomic(ctx,atomicTimer,tick,canvas.width,canvas.height,atomicParticulas,atomicTimer<80?'charge':atomicTimer<160?'release':'blast');
@@ -801,38 +826,22 @@ export default function Jogo2D() {
       if(hogyokuAtivo&&cl==='aizen') desenharHogyokuFusion(ctx,hogyokuTimer,tick,canvas.width,canvas.height,hogyokuParticulas,hogyokuKilled);
 
       // ════ UI HUD ════
-      // HP bar
       ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(18,canvas.height-44,204,22);
       const hpG=ctx.createLinearGradient(20,0,220,0);
       hpG.addColorStop(0,'#7f1d1d');hpG.addColorStop(.5,'#ef4444');hpG.addColorStop(1,'#fca5a5');
       ctx.fillStyle=hpG; ctx.fillRect(20,canvas.height-42,(Math.max(0,playerHp)/status.hpMax)*200,18);
       ctx.fillStyle='white'; ctx.font='bold 11px monospace'; ctx.textAlign='left';
       ctx.fillText(`❤ ${Math.floor(Math.max(0,playerHp))} / ${status.hpMax}`,26,canvas.height-29);
-
-      // Online
       if(online){ctx.font='bold 10px monospace';ctx.textAlign='right';ctx.fillStyle='#4ade80';ctx.fillText(`🌐 ${qtJog}P`,canvas.width-10,20);}
-
-      // Indicador onda
       ctx.font='bold 18px serif'; ctx.textAlign='left';
       const isBossWave=ondaAtual%5===0, isFinalWave=ondaAtual===TOTAL_ONDAS;
       ctx.fillStyle=isFinalWave?'#ff6fff':isBossWave?'#fca5a5':'#e2e8f0';
       ctx.shadowColor=isFinalWave?'#ff0090':isBossWave?'#dc2626':'#7c3aed'; ctx.shadowBlur=12;
       ctx.fillText(isFinalWave?'💀 BOSS FINAL !! 💀':isBossWave?`⚠ ONDA ${ondaAtual} — BOSS ⚠`:`⚔ ONDA ${ondaAtual} / ${TOTAL_ONDAS}`,20,38); ctx.shadowBlur=0;
-
-      // Indicador de poções
-      if(pocoes.length>0){
-        ctx.font='bold 10px monospace'; ctx.textAlign='left';
-        ctx.fillStyle='#4ade80'; ctx.shadowColor='#4ade80'; ctx.shadowBlur=6;
-        ctx.fillText(`✚ ${pocoes.length} poção${pocoes.length>1?'ões':''} no mapa`,20,canvas.height-56);
-        ctx.shadowBlur=0;
-      }
-
-      // ── MINIMAPA ──
+      if(pocoes.length>0){ctx.font='bold 10px monospace';ctx.textAlign='left';ctx.fillStyle='#4ade80';ctx.shadowColor='#4ade80';ctx.shadowBlur=6;ctx.fillText(`✚ ${pocoes.length} poção${pocoes.length>1?'ões':''} no mapa`,20,canvas.height-56);ctx.shadowBlur=0;}
       desenharMinimapa(ctx, player.x, player.y, monstros, remotosRef.current, pocoes, WORLD_WIDTH, WORLD_HEIGHT, canvas.width, canvas.height, tick);
 
       // ════ UI por classe ════
-
-      // UI Mago
       if(cl==='mago'){
         const hpRdy=hollowCooldown<=0&&hollowFase==='idle',hpCar=hollowFase==='carregando',hcdr=hollowCooldown/HOLLOW_CD_MAX;
         const bx=canvas.width-74,by=canvas.height-74,bs=58;
@@ -853,8 +862,6 @@ export default function Jogo2D() {
         if(!redRdy){const rcdr2=redCooldown/RED_CD;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(rbx,rby,rbs,rbs*rcdr2);}
         ctx.font='bold 22px monospace';ctx.textAlign='center';ctx.fillStyle=redRdy?'#ff6622':'#7f1d1d';if(redRdy){ctx.shadowColor='#ff2200';ctx.shadowBlur=12;}ctx.fillText('🔴',rbx+rbs/2,rby+32);ctx.shadowBlur=0;ctx.font='bold 9px monospace';ctx.fillStyle=redRdy?'#fca5a5':'#7f1d1d';ctx.fillText('[CLICK]',rbx+rbs/2,rby+44);ctx.fillText('RED',rbx+rbs/2,rby+54);
       }
-
-      // UI Guerreiro
       if(cl==='guerreiro'){
         const pr=furacaoCooldown<=0&&!furacaoAtivo,at=furacaoAtivo,cdr=furacaoCooldown/FUR_CD_MAX;
         const bx=canvas.width-74,by=canvas.height-74,bs=58;
@@ -875,8 +882,6 @@ export default function Jogo2D() {
         else if(uAt&&ryoikiLimpouOnda){ctx.font='bold 10px monospace';ctx.fillStyle='#fca5a5';ctx.fillText('próx...',ubx+ubs/2,uby+22);}
         else if(!uPr){ctx.font='bold 13px monospace';ctx.fillStyle='#fca5a5';ctx.fillText(`${Math.ceil(ryoikiCooldown/60)}s`,ubx+ubs/2,uby+22);}
       }
-
-      // UI Sombrio
       if(cl==='sombrio'){
         const ptu=ressurrCooldown<=0&&killsAcum>=KILLS_NEEDED&&!ariseAtivo,cdr=ressurrCooldown/RESSURR_CD_MAX;
         const bx=canvas.width-74,by=canvas.height-74,bs=58;
@@ -904,8 +909,6 @@ export default function Jogo2D() {
         if(invAt){ctx.font='bold 11px monospace';ctx.fillStyle='#f0abfc';ctx.shadowColor='#e879f9';ctx.shadowBlur=8;ctx.fillText(`${Math.ceil((INVOC_DUR-invocTimer)/60)}s`,ubx+ubs/2,uby+22);ctx.shadowBlur=0;}
         else if(!invRdy){const mins2=Math.floor(invocCooldown/3600),secs2=Math.ceil((invocCooldown%3600)/60);ctx.font='bold 11px monospace';ctx.fillStyle='#c084fc';ctx.fillText(mins2>0?`${mins2}m${secs2}s`:`${Math.ceil(invocCooldown/60)}s`,ubx+ubs/2,uby+22);}
       }
-
-      // UI Shadow
       if(cl==='shadow'){
         const ePr=ebonyCooldown<=0&&!ebonyAtivo,eAt=ebonyAtivo,eCdr=ebonyCooldown/EBONY_CD_MAX;
         const bx=canvas.width-74,by=canvas.height-74,bs=58;
@@ -925,26 +928,19 @@ export default function Jogo2D() {
         if(aaAt){ctx.font='bold 9px monospace';ctx.fillStyle='#f0abfc';ctx.fillText(`${Math.ceil((ATOMIC_DUR-atomicTimer)/60)}s`,ubx+ubs/2,uby+18);}
         else if(!aaPr){const mins3=Math.floor(atomicCooldown/3600),secs3=Math.ceil((atomicCooldown%3600)/60);ctx.font='bold 11px monospace';ctx.fillStyle='#a855f7';ctx.fillText(mins3>0?`${mins3}m${secs3}s`:`${Math.ceil(atomicCooldown/60)}s`,ubx+ubs/2,uby+22);}
       }
-
-      // UI Aizen
       if(cl==='aizen'){
         const ilPr=ilusaoCooldown<=0,ilBx=canvas.width-74,ilBy=canvas.height-74,ilBs=58;
         ctx.fillStyle=ilPr?'rgba(120,80,0,.92)':'rgba(20,12,0,.88)';ctx.fillRect(ilBx,ilBy,ilBs,ilBs);ctx.strokeStyle=ilPr?'#fbbf24':'#78350f';ctx.lineWidth=ilPr?2.5:1.5;if(ilPr){ctx.shadowColor='#fbbf24';ctx.shadowBlur=12;}ctx.strokeRect(ilBx,ilBy,ilBs,ilBs);ctx.shadowBlur=0;
         if(!ilPr){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(ilBx,ilBy,ilBs,ilBs*(ilusaoCooldown/ILUSAO_CD));}
         ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillStyle=ilPr?'#fde68a':'#78350f';ctx.fillText('🪞',ilBx+ilBs/2,ilBy+34);ctx.font='bold 9px monospace';ctx.fillStyle=ilPr?'#fef9c3':'#78350f';ctx.fillText('[CLICK]',ilBx+ilBs/2,ilBy+52);
-
-        // Kyōka Suigetsu — Z (mostra INVENCÍVEL quando ativo)
         const kPr=kyokaCooldown<=0&&!kyokaAtivo,kAt=kyokaAtivo,kCdr=kyokaCooldown/KYOKA_CD_MAX;
         const kbx=canvas.width-74,kby=canvas.height-148,kbs=58;
         ctx.fillStyle=kAt?'rgba(120,80,0,.97)':kPr?'rgba(100,65,0,.92)':'rgba(18,10,0,.88)';ctx.fillRect(kbx,kby,kbs,kbs);ctx.strokeStyle=kAt?'#fde68a':kPr?'#fbbf24':'#78350f';ctx.lineWidth=kAt||kPr?2.5:1.5;if(kAt||kPr){ctx.shadowColor='#fbbf24';ctx.shadowBlur=kAt?20:12;}ctx.strokeRect(kbx,kby,kbs,kbs);ctx.shadowBlur=0;
         if(!kPr&&!kAt){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(kbx,kby,kbs,kbs*kCdr);}
         ctx.font='bold 9px monospace';ctx.fillStyle=kAt?'#fef9c3':kPr?'#fde68a':'#78350f';ctx.fillText('鏡花水月',kbx+kbs/2,kby+16);
-        ctx.font='bold 10px monospace';ctx.fillStyle=kAt?'#fef9c3':kPr?'#fde68a':'#78350f';
-        ctx.fillText(kAt?'🛡INVU':' KYOKA',kbx+kbs/2,kby+30);
-        ctx.fillText('[Z]',kbx+kbs/2,kby+50);
+        ctx.font='bold 10px monospace';ctx.fillStyle=kAt?'#fef9c3':kPr?'#fde68a':'#78350f';ctx.fillText(kAt?'🛡INVU':' KYOKA',kbx+kbs/2,kby+30);ctx.fillText('[Z]',kbx+kbs/2,kby+50);
         if(kAt){ctx.font='bold 9px monospace';ctx.fillStyle='#fde68a';ctx.fillText(`${Math.ceil((KYOKA_DUR-kyokaTimer)/60)}s`,kbx+kbs/2,kby+42);}
         else if(!kPr){ctx.font='bold 11px monospace';ctx.fillStyle='#fbbf24';ctx.fillText(`${Math.ceil(kyokaCooldown/60)}s`,kbx+kbs/2,kby+20);}
-
         const hPr=hogyokuCooldown<=0&&!hogyokuAtivo,hAt=hogyokuAtivo,hCdr=hogyokuCooldown/HOGYOKU_CD_MAX;
         const hbx=canvas.width-74,hby=canvas.height-222,hbs=58;
         ctx.fillStyle=hAt?'rgba(80,10,120,.99)':hPr?'rgba(60,5,90,.95)':'rgba(15,0,25,.9)';ctx.fillRect(hbx,hby,hbs,hbs);ctx.strokeStyle=hAt?'#fbbf24':hPr?'#a855f7':'#4c1d95';ctx.lineWidth=hAt||hPr?2.5:1.5;if(hAt||hPr){ctx.shadowColor=hAt?'#fbbf24':'#a855f7';ctx.shadowBlur=hAt?28:14;}ctx.strokeRect(hbx,hby,hbs,hbs);ctx.shadowBlur=0;
@@ -964,6 +960,8 @@ export default function Jogo2D() {
       canvas.removeEventListener('mousemove', onMouse);
       canvas.removeEventListener('mousedown', onMouseDown);
       cancelAnimationFrame(animId);
+      // Para o áudio ao desmontar o componente
+      pararAudio(0);
     };
   }, [status, imgPlayer, imgArmaGuerr, imgArmaMago, imgGuerreiro, imgMago, imgSombrio, imgShadow, imgAizen]);
 
