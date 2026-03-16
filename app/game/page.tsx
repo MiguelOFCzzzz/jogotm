@@ -44,6 +44,7 @@ export default function Jogo2D() {
   const mouseRef   = useRef({ x: 450, y: 300 });
   const socketRef  = useRef<Socket | null>(null);
   const remotosRef = useRef<Record<string, JogadorRemoto>>({});
+  const souHostRef = useRef(false);
   const [online, setOnline] = useState(false);
   const [qtJog, setQtJog]   = useState(1);
 
@@ -52,12 +53,10 @@ export default function Jogo2D() {
     const classe = (raw === 'mago' || raw === 'sombrio' || raw === 'shadow' || raw === 'aizen') ? raw : 'guerreiro';
     return { nome: typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_char_nome') || 'Herói') : 'Herói', classe, str:10, agi:10, int:10, vit:10, hpMax:200 };
   });
-  
 
-    useEffect(() => {
-  precarregarAudios();
-}, []);
-
+  useEffect(() => {
+    precarregarAudios();
+  }, []);
 
   const LINKS: Record<string,string> = {
     guerreiro: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/46a9374d-e7fd-4bca-9214-7e3976a050d0/dgfzl3p-11e8a47e-8122-4792-80d4-27f9b491ce2f.png/v1/fill/w_800,h_999/sukuna_png_by_vortexkun_dgfzl3p-pre.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MTM1MCIsInBhdGgiOiIvZi80NmE5Mzc0ZC1lN2ZkLTRiY2EtOTIxNC03ZTM5NzZhMDUwZDAvZGdmemwzcC0xMWU4YTQ3ZS04MTIyLTQ3OTItODBkNC0yN2Y5YjQ5MWNlMmYucG5nIiwid2lkdGgiOiI8PTEwODAifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6aW1hZ2Uub3BlcmF0aW9ucyJdfQ.vLzUOZUOZgaduP0pKUxjxW_nsjgXnKVAx5JjHjt5P3M',
@@ -71,36 +70,114 @@ export default function Jogo2D() {
   const imgArmaGuerr = useImagem('https://png.pngtree.com/png-clipart/20211018/ourmid/pngtree-fire-burning-realistic-red-flame-png-image_3977689.png');
   const imgArmaMago  = useImagem('https://toppng.com/uploads/preview/pixel-fireball-fireball-pixel-art-115631306101ozjjztwry.png');
   const imgGuerreiro = useImagem(LINKS.guerreiro);
-  const imgMago      = useImagem('');
+  const imgMago      = useImagem(LINKS.mago);
   const imgSombrio   = useImagem(LINKS.sombrio);
   const imgShadow    = useImagem(LINKS.shadow ?? null);
   const imgAizen     = useImagem(LINKS.aizen  ?? null);
 
   // ── Socket.io ──
-  useEffect(() => {
-    const s = io('http://localhost:3001', { transports: ['websocket'] });
-    socketRef.current = s;
-    const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
-    s.on('connect', () => {
-      setOnline(true);
-      s.emit('entrar_no_jogo', { codigo: codigoSala, nome: status.nome, classe: status.classe, x: 1500, y: 1000 });
-    });
-    s.on('disconnect', () => setOnline(false));
-    s.on('lista_jogadores', (lista: JogadorRemoto[]) => {
-      lista.forEach(j => { if (j.id !== s.id) remotosRef.current[j.id] = j; });
-      setQtJog(1 + Object.keys(remotosRef.current).length);
-    });
-    s.on('novo_jogador_conectado', (j: JogadorRemoto) => { remotosRef.current[j.id] = j; setQtJog(q => q + 1); });
-    s.on('jogador_moveu', (d: { id:string; x:number; y:number; direcaoRad:number }) => {
-      if (remotosRef.current[d.id]) { remotosRef.current[d.id].x=d.x; remotosRef.current[d.id].y=d.y; remotosRef.current[d.id].direcaoRad=d.direcaoRad; }
-    });
-    s.on('hp_jogador', (d: { id:string; hp:number; hpMax:number }) => {
-      if (remotosRef.current[d.id]) { remotosRef.current[d.id].hp=d.hp; remotosRef.current[d.id].hpMax=d.hpMax; }
-    });
-    s.on('jogador_saiu', (id: string) => { delete remotosRef.current[id]; setQtJog(q => Math.max(1, q - 1)); });
-    return () => { s.disconnect(); };
-  }, [status.nome, status.classe]);
 
+useEffect(() => {
+
+  // Detecta o IP de quem está acessando a página automaticamente (evita o erro do localhost)
+
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+
+  const s = io(`http://${host}:3001`, { transports: ['websocket'] });
+
+
+
+  socketRef.current = s;
+
+  const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
+
+
+
+  s.on('connect', () => {
+
+    setOnline(true);
+
+    console.log("Conectado ao servidor no host:", host);
+
+    s.emit('entrar_no_jogo', { codigo: codigoSala, nome: status.nome, classe: status.classe, x: 1500, y: 1000 });
+
+  });
+
+
+
+  s.on('disconnect', () => setOnline(false));
+
+
+
+  s.on('lista_jogadores', (lista: JogadorRemoto[]) => {
+
+    lista.forEach(j => { if (j.id !== s.id) remotosRef.current[j.id] = j; });
+
+    setQtJog(1 + Object.keys(remotosRef.current).length);
+
+  });
+
+
+
+  s.on('novo_jogador_conectado', (j: JogadorRemoto) => {
+
+    remotosRef.current[j.id] = j;
+
+    setQtJog(q => q + 1);
+
+  });
+
+
+
+  s.on('jogador_moveu', (d: { id:string; x:number; y:number; direcaoRad:number }) => {
+
+    if (remotosRef.current[d.id]) {
+
+      remotosRef.current[d.id].x=d.x;
+
+      remotosRef.current[d.id].y=d.y;
+
+      remotosRef.current[d.id].direcaoRad=d.direcaoRad;
+
+    }
+
+  });
+
+
+
+  s.on('hp_jogador', (d: { id:string; hp:number; hpMax:number }) => {
+
+    if (remotosRef.current[d.id]) {
+
+      remotosRef.current[d.id].hp=d.hp;
+
+      remotosRef.current[d.id].hpMax=d.hpMax;
+
+    }
+
+  });
+
+
+
+  s.on('jogador_saiu', (id: string) => {
+
+    delete remotosRef.current[id];
+
+    setQtJog(q => Math.max(1, q - 1));
+
+  });
+
+
+
+  s.on('voce_e_host', (val: boolean) => { souHostRef.current = val; });
+
+  s.on('novo_host', (id: string) => { if (s.id === id) souHostRef.current = true; });
+
+
+
+  return () => { s.disconnect(); };
+
+}, [status.nome, status.classe]); // Adicionei status.classe aqui por segurança, já que é usado no emit
   // ── Game loop ──
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -108,10 +185,6 @@ export default function Jogo2D() {
     ctx.imageSmoothingEnabled = false;
     const cl = status.classe;
 
-    // Pré-carrega todos os áudios em background
- 
-
-    // ── Estado do jogo ──
     const projectiles: Projetil[] = [];
     let projetilInimigos: ProjetilInimigo[] = [];
     let melee: AtaqueMelee = { ativo:false, anguloAtual:0, duracao:0, dano: 20 + status.str };
@@ -145,6 +218,7 @@ export default function Jogo2D() {
     const CORTE_DANO=18+status.agi;
     let explosoesArea: ExplosaoArea[] = [];
     let syncMovTick=0;
+    let syncMonstrosTick=0;
 
     const HOLLOW_CD_MAX=900, HOLLOW_DANO=60;
     const RYOIKI_M_CD_MAX=14400, RYOIKI_M_DUR=420, RYOIKI_M_KILL_T=180;
@@ -172,7 +246,6 @@ export default function Jogo2D() {
     let beruPos  = { x:0, y:0, alpha:0, scale:0 };
     let invocParticulas: {x:number;y:number;vx:number;vy:number;vida:number;r:number;cor:string}[] = [];
 
-    // Shadow
     let shadowSlashAtivo = false, shadowSlashTimer = 0, shadowSlashAngulo = 0;
     let ebonyAtivo = false, ebonyTimer = 0, ebonyCooldown = 0;
     const EBONY_CD_MAX = 900;
@@ -181,7 +254,6 @@ export default function Jogo2D() {
     const SHADOW_PROJ_VEL = 14, SHADOW_PROJ_DANO = 30 + status.agi * 2, SHADOW_PROJ_CD = 18;
     let shadowProjCooldown = 0;
 
-    // Aizen
     let ilusaoParticulas: IlusaoEfeito[] = [];
     const ILUSAO_VEL = 15, ILUSAO_DANO = 25 + status.int, ILUSAO_CD = 22;
     let ilusaoCooldown = 0;
@@ -189,7 +261,6 @@ export default function Jogo2D() {
     let hogyokuAtivo = false, hogyokuTimer = 0, hogyokuCooldown = 0, hogyokuKilled = false;
     let hogyokuParticulas: { x:number; y:number; vx:number; vy:number; vida:number; r:number; cor:string }[] = [];
 
-    // ── POÇÕES ──
     let pocoes: Pocao[] = [];
     let pocaoIdCounter = 0;
     const POCAO_CURA_BASE = 40;
@@ -273,6 +344,31 @@ export default function Jogo2D() {
     }
 
     let monstros = gerarOnda(ondaAtual);
+
+    // ── Eventos de sincronização de monstros ──
+    const socket = socketRef.current;
+    if (socket) {
+      socket.on('monstros_atualizados', (data: { monstros: Monstro[]; ondaAtual: number; raioBossArr: RaioBoss[] }) => {
+        if (!souHostRef.current) {
+          monstros = data.monstros;
+          ondaAtual = data.ondaAtual;
+          raioBossArr = data.raioBossArr || [];
+        }
+      });
+      socket.on('aplicar_dano', (data: { monstroId: number; dano: number }) => {
+        if (!souHostRef.current) return;
+        const m = monstros.find(m => m.id === data.monstroId);
+        if (m) { m.hp -= data.dano; m.hitTimer = 6; }
+      });
+      socket.on('onda_mudou', (data: { ondaAtual: number }) => {
+        if (!souHostRef.current) {
+          ondaAtual = data.ondaAtual;
+          raioBossArr = [];
+          projetilInimigos = [];
+        }
+      });
+    }
+
     const player = {
       x:WORLD_WIDTH/2, y:WORLD_HEIGHT/2,
       speed:3+status.agi*.15, size:80,
@@ -313,6 +409,16 @@ export default function Jogo2D() {
       if(sombrasFila.length<MAX_SOMBRAS) sombrasFila.push({ tipo:m.tipo, size:m.size, maxHp:m.maxHp, ordemMorte:contadorMorte });
     }
 
+    // ── Causa dano: host aplica direto, cliente envia para host ──
+    function causarDano(m: Monstro, dano: number) {
+      if (souHostRef.current) {
+        m.hp -= dano;
+        m.hitTimer = 8;
+      } else {
+        socketRef.current?.emit('dano_monstro', { monstroId: m.id, dano });
+      }
+    }
+
     const render = () => {
       tick++;
 
@@ -331,8 +437,10 @@ export default function Jogo2D() {
         desenharTransicaoOnda(ctx, ryoikiDelayTimer, ondaAtual, canvas.width, canvas.height);
         if(ryoikiDelayTimer>=RYOIKI_DELAY){
           ryoikiLimpouOnda=false; ryoikiDelayTimer=0;
-          if(ondaAtual<TOTAL_ONDAS){ondaAtual++;monstros=gerarOnda(ondaAtual);raioBossArr.length=0;projetilInimigos=[];}
-          else estadoJogo='vitoria';
+          if(ondaAtual<TOTAL_ONDAS){
+            ondaAtual++; monstros=gerarOnda(ondaAtual); raioBossArr.length=0; projetilInimigos=[];
+            if(souHostRef.current) socketRef.current?.emit('nova_onda', { ondaAtual });
+          } else estadoJogo='vitoria';
         }
         animId=requestAnimationFrame(render); return;
       }
@@ -353,6 +461,14 @@ export default function Jogo2D() {
         socketRef.current?.emit('sync_hp',{hp:playerHp,hpMax:status.hpMax});
       }
 
+      // ── Host sincroniza monstros a cada ~100ms (6 frames) ──
+      if(souHostRef.current){
+        if(++syncMonstrosTick>=6){
+          syncMonstrosTick=0;
+          socketRef.current?.emit('sync_monstros',{ monstros, ondaAtual, raioBossArr });
+        }
+      }
+
       // ── Ataque ESPAÇO ──
       if(teclas[' ']&&player.cooldownAtaque<=0){
         if(cl==='guerreiro'){
@@ -365,7 +481,6 @@ export default function Jogo2D() {
             socketRef.current?.emit('atacar',{tipo:'projGuerreiro',angulo:ang});
           }
         } else if(cl==='mago'||cl==='shadow'){
-          // tratado abaixo
         } else {
           const mwx=mouseRef.current.x+camera.x, mwy=mouseRef.current.y+camera.y;
           const ang=Math.atan2(mwy-(player.y+40),mwx-(player.x+40)); player.direcaoRad=ang;
@@ -377,13 +492,11 @@ export default function Jogo2D() {
       if(guerrProjCooldown>0) guerrProjCooldown--;
       if(redCooldown>0) redCooldown--;
 
-      // ── Mago: Red clique ──
       if(cl==='mago' && redClickPendente && redCooldown<=0){
         const mx=redClickPendente.x, my=redClickPendente.y; redClickPendente=null;
         const ang=Math.atan2(my-(player.y+40),mx-(player.x+40)); player.direcaoRad=ang;
         projectiles.push({x:player.x+40,y:player.y+40,vx:Math.cos(ang)*RED_VEL,vy:Math.sin(ang)*RED_VEL,tipo:'red',angulo:ang,dano:RED_DANO});
         redCooldown=RED_CD;
-        socketRef.current?.emit('atacar',{tipo:'projRed',angulo:ang});
       } else if(cl==='mago' && redClickPendente && redCooldown>0){ redClickPendente=null; }
       redExplosoes=redExplosoes.filter(ex=>{ ex.timer++; return ex.timer<ex.maxTimer; });
 
@@ -407,47 +520,35 @@ export default function Jogo2D() {
         if(hollowCooldown>0) hollowCooldown--;
         if(teclas['x']&&ryoikiMagoCooldown<=0&&!ryoikiMagoAtivo){
           ryoikiMagoAtivo=true; ryoikiMagoTimer=0; ryoikiMagoKilled=false; floatingInfos=[];
-          // ── ÁUDIO: Mago ultimate ──
           tocarUltimate('mago');
           for(let fi=0;fi<120;fi++) floatingInfos.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vy:-(0.3+Math.random()*0.8),alpha:Math.random()*0.7+0.2,txt:infoTexts[Math.floor(Math.random()*infoTexts.length)],color:['#fff','#e879f9','#a78bfa','#c084fc','#f0abfc','#ddd6fe'][Math.floor(Math.random()*6)]});
         }
         if(ryoikiMagoAtivo){
           ryoikiMagoTimer++;
           if(ryoikiMagoTimer>=RYOIKI_M_KILL_T&&!ryoikiMagoKilled){monstros.length=0;ryoikiMagoKilled=true;}
-          if(ryoikiMagoTimer>=RYOIKI_M_DUR){
-            ryoikiMagoAtivo=false; ryoikiMagoCooldown=RYOIKI_M_CD_MAX; floatingInfos=[];
-            // ── ÁUDIO: para com fade ──
-            //pararAudio();
-          }
+          if(ryoikiMagoTimer>=RYOIKI_M_DUR){ryoikiMagoAtivo=false;ryoikiMagoCooldown=RYOIKI_M_CD_MAX;floatingInfos=[];pararAudio();}
         }
         if(ryoikiMagoCooldown>0) ryoikiMagoCooldown--;
       }
 
       // ── Habilidades Guerreiro ──
       if(cl==='guerreiro'){
-        if(teclas['z']&&furacaoCooldown<=0&&!furacaoAtivo){furacaoAtivo=true;furacaoTimer=0;furacaoCooldown=FUR_CD_MAX;socketRef.current?.emit('habilidade_z',{tipo:'furacao'});}
+        if(teclas['z']&&furacaoCooldown<=0&&!furacaoAtivo){furacaoAtivo=true;furacaoTimer=0;furacaoCooldown=FUR_CD_MAX;}
         if(furacaoAtivo){
           furacaoTimer++; furacaoAngulo+=.18;
-          monstros.forEach(m=>{const ddx=(m.x+m.size/2)-(player.x+40),ddy=(m.y+m.size/2)-(player.y+40);if(Math.hypot(ddx,ddy)<FUR_ALCANCE+m.size/2){m.hp-=FUR_DANO_TICK;m.hitTimer=3;const d=Math.max(1,Math.hypot(ddx,ddy));m.x+=(ddx/d)*2.5;m.y+=(ddy/d)*2.5;}});
+          monstros.forEach(m=>{const ddx=(m.x+m.size/2)-(player.x+40),ddy=(m.y+m.size/2)-(player.y+40);if(Math.hypot(ddx,ddy)<FUR_ALCANCE+m.size/2){causarDano(m,FUR_DANO_TICK);const d=Math.max(1,Math.hypot(ddx,ddy));m.x+=(ddx/d)*2.5;m.y+=(ddy/d)*2.5;}});
           if(furacaoTimer>=FUR_DUR) furacaoAtivo=false;
         }
         if(furacaoCooldown>0) furacaoCooldown--;
         if(teclas['x']&&ryoikiCooldown<=0&&!ryoikiAtivo&&!ryoikiLimpouOnda){
           ryoikiAtivo=true; ryoikiTimer=0; ryoikiCooldown=RYO_CD_MAX; slashesDomain=[];
-          // ── ÁUDIO: Guerreiro ultimate ──
           tocarUltimate('guerreiro');
-          socketRef.current?.emit('habilidade_z',{tipo:'ryoiki'});
         }
         if(ryoikiAtivo){
           ryoikiTimer++;
-          monstros.forEach(m=>{m.hp-=(m.hp+m.maxHp)/RYO_DUR+5;m.hitTimer=3;});
+          monstros.forEach(m=>{causarDano(m,(m.hp+m.maxHp)/RYO_DUR+5);});
           for(let i=monstros.length-1;i>=0;i--){if(monstros[i].hp<=0)monstros.splice(i,1);}
-          if(ryoikiTimer>=RYO_DUR){
-            monstros.length=0; ryoikiAtivo=false; slashesDomain=[];
-            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
-            // ── ÁUDIO: para com fade ──
-            pararAudio();
-          }
+          if(ryoikiTimer>=RYO_DUR){monstros.length=0;ryoikiAtivo=false;slashesDomain=[];ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
         }
         if(ryoikiCooldown>0) ryoikiCooldown--;
       }
@@ -459,7 +560,6 @@ export default function Jogo2D() {
           ariseParticulas=Array.from({length:60},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-0.5)*1.5,vy:-(1.5+Math.random()*2.5),vida:80+Math.random()*80,r:2+Math.random()*5,cor:['#7c3aed','#a855f7','#c084fc','#e879f9','#4c1d95'][Math.floor(Math.random()*5)]}));
           const pi=mortos.slice(0,MAX_ALIADOS);
           ariseAliados=pi.map((_,i)=>({x:canvas.width*0.5+(i-pi.length/2)*100,y:canvas.height*0.72,nome:`Sombra #${i+1}`,alpha:0,scale:1,vy:-2}));
-          socketRef.current?.emit('habilidade_z',{tipo:'ressurr'});
         }
         if(ariseAtivo){
           ariseTimer++;
@@ -479,20 +579,13 @@ export default function Jogo2D() {
         if(ressurrCooldown>0) ressurrCooldown--;
         if(teclas['x']&&invocCooldown<=0&&!invocAtivo&&!ariseAtivo){
           invocAtivo=true; invocTimer=0; invocKilled=false;
-          // ── ÁUDIO: Sombrio ultimate ──
           tocarUltimate('sombrio');
           invocParticulas=Array.from({length:80},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-0.5)*1.2,vy:-(1+Math.random()*3),vida:60+Math.random()*100,r:1.5+Math.random()*4,cor:['#7c3aed','#a855f7','#c084fc','#e879f9','#581c87'][Math.floor(Math.random()*5)]}));
-          socketRef.current?.emit('habilidade_z',{tipo:'invocacao_ultimate'});
         }
         if(invocAtivo){
           invocTimer++;
-          if(invocTimer>=INVOC_KILL_T&&!invocKilled){monstros.forEach(m=>{for(let ex=0;ex<3;ex++)explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40});});monstros.length=0;invocKilled=true;}
-          if(invocTimer>=INVOC_DUR){
-            invocAtivo=false; invocParticulas=[]; invocCooldown=INVOC_CD_MAX;
-            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
-            // ── ÁUDIO: para com fade ──
-            pararAudio();
-          }
+          if(invocTimer>=INVOC_KILL_T&&!invocKilled){monstros.forEach(m=>{explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40});});monstros.length=0;invocKilled=true;}
+          if(invocTimer>=INVOC_DUR){invocAtivo=false;invocParticulas=[];invocCooldown=INVOC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
         }
         if(invocCooldown>0) invocCooldown--;
         aliados=aliados.filter(a=>{
@@ -505,7 +598,7 @@ export default function Jogo2D() {
             a.anguloAtaque=Math.atan2(ady,adx);
             const moveRange=(a.tipo==='arqueiro'||a.tipo==='mago_ini')?ALIADO_PROJ_RANGE*.8:ALIADO_ALCANCE;
             if(ad>moveRange){const spd=a.tipo==='velocista'?3.2:1.8;a.x+=(adx/ad)*spd;a.y+=(ady/ad)*spd;}
-            if((a.tipo==='tanque'||a.tipo==='normal'||a.tipo==='velocista')&&ad<ALIADO_ALCANCE+alv.size/2&&a.cooldownAtaque<=0){alv.hp-=ALIADO_DANO*(a.tipo==='tanque'?1.5:a.tipo==='velocista'?.7:1);alv.hitTimer=6;a.cooldownAtaque=ALIADO_CD*(a.tipo==='velocista'?.5:1);}
+            if((a.tipo==='tanque'||a.tipo==='normal'||a.tipo==='velocista')&&ad<ALIADO_ALCANCE+alv.size/2&&a.cooldownAtaque<=0){causarDano(alv,ALIADO_DANO*(a.tipo==='tanque'?1.5:a.tipo==='velocista'?.7:1));a.cooldownAtaque=ALIADO_CD*(a.tipo==='velocista'?.5:1);}
             if((a.tipo==='arqueiro'||a.tipo==='mago_ini')&&a.cooldownAtaque<=0&&ad<ALIADO_PROJ_RANGE){
               const spd2=a.tipo==='mago_ini'?7:12;
               projetiisAliados.push({x:a.x+a.size/2,y:a.y+a.size/2,vx:Math.cos(a.anguloAtaque)*spd2,vy:Math.sin(a.anguloAtaque)*spd2,vida:60,dano:ALIADO_PROJ_DANO,cor:a.tipo==='mago_ini'?'#4c1d95':'#14532d',corBrilho:a.tipo==='mago_ini'?'#e879f9':'#4ade80',homingTimer:0});
@@ -531,25 +624,19 @@ export default function Jogo2D() {
         if(teclas['z']&&ebonyCooldown<=0&&!ebonyAtivo){ebonyAtivo=true;ebonyTimer=0;ebonyCooldown=EBONY_CD_MAX;}
         if(ebonyAtivo){
           ebonyTimer++;
-          monstros.forEach(m=>{const d=Math.hypot((m.x+m.size/2)-(player.x+40),(m.y+m.size/2)-(player.y+40));if(d<EBONY_AREA+m.size/2){m.hp-=1.2;m.hitTimer=2;}});
+          monstros.forEach(m=>{const d=Math.hypot((m.x+m.size/2)-(player.x+40),(m.y+m.size/2)-(player.y+40));if(d<EBONY_AREA+m.size/2){causarDano(m,1.2);}});
           if(ebonyTimer>=EBONY_DUR) ebonyAtivo=false;
         }
         if(ebonyCooldown>0) ebonyCooldown--;
         if(teclas['x']&&atomicCooldown<=0&&!atomicAtivo){
           atomicAtivo=true; atomicTimer=0;
-          // ── ÁUDIO: Shadow ultimate ──
           tocarUltimate('shadow');
           atomicParticulas=Array.from({length:80},()=>{const a=Math.random()*Math.PI*2,v=2+Math.random()*7;return{x:player.x+40,y:player.y+40,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vida:30+Math.random()*60,r:2+Math.random()*5};});
         }
         if(atomicAtivo){
           atomicTimer++;
           if(atomicTimer===80){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;}
-          if(atomicTimer>=ATOMIC_DUR){
-            atomicAtivo=false; atomicCooldown=ATOMIC_CD_MAX;
-            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
-            // ── ÁUDIO: para com fade ──
-            pararAudio();
-          }
+          if(atomicTimer>=ATOMIC_DUR){atomicAtivo=false;atomicCooldown=ATOMIC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
         }
         if(atomicCooldown>0) atomicCooldown--;
       }
@@ -563,48 +650,33 @@ export default function Jogo2D() {
           ilusaoCooldown=ILUSAO_CD;
         } else if(redClickPendente&&ilusaoCooldown>0) redClickPendente=null;
         if(ilusaoCooldown>0) ilusaoCooldown--;
-
-        // Z = Kyōka Suigetsu — INVENCÍVEL + ÁUDIO
-        if(teclas['z']&&kyokaCooldown<=0&&!kyokaAtivo){
-          kyokaAtivo=true; kyokaTimer=0; kyokaCooldown=KYOKA_CD_MAX;
-          // ── ÁUDIO: Aizen Z ──
-          tocarUltimate('aizen');
-        }
+        if(teclas['z']&&kyokaCooldown<=0&&!kyokaAtivo){kyokaAtivo=true;kyokaTimer=0;kyokaCooldown=KYOKA_CD_MAX;tocarUltimate('aizen');}
         if(kyokaAtivo){
           kyokaTimer++;
-          if(kyokaTimer%20===0){monstros.forEach(m=>{const ri=Math.floor(Math.random()*monstros.length);if(monstros[ri]&&monstros[ri]!==m){monstros[ri].hp-=15+status.int;monstros[ri].hitTimer=8;}});}
-          if(kyokaTimer>=KYOKA_DUR){
-            kyokaAtivo=false;
-            // ── ÁUDIO: para com fade ──
-            pararAudio();
-          }
+          if(kyokaTimer%20===0){monstros.forEach(m=>{const ri=Math.floor(Math.random()*monstros.length);if(monstros[ri]&&monstros[ri]!==m){causarDano(monstros[ri],15+status.int);}});}
+          if(kyokaTimer>=KYOKA_DUR){kyokaAtivo=false;pararAudio();}
         }
         if(kyokaCooldown>0) kyokaCooldown--;
         ilusaoParticulas=ilusaoParticulas.filter(ef=>{desenharIlusaoImpacto(ctx,ef);return ef.timer<ef.maxTimer;});
-
         if(teclas['x']&&hogyokuCooldown<=0&&!hogyokuAtivo){
           hogyokuAtivo=true; hogyokuTimer=0; hogyokuKilled=false;
-          // ── ÁUDIO: Aizen X (mesmo áudio) ──
           tocarUltimate('aizen');
           hogyokuParticulas=Array.from({length:80},()=>{const a=Math.random()*Math.PI*2,v=1.5+Math.random()*5;return{x:canvasRef.current!.width/2,y:canvasRef.current!.height/2,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vida:40+Math.random()*80,r:1.5+Math.random()*4,cor:'#fbbf24'};});
         }
         if(hogyokuAtivo){
           hogyokuTimer++;
           if(hogyokuTimer===Math.floor(HOGYOKU_DUR*.45)&&!hogyokuKilled){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;hogyokuKilled=true;}
-          if(hogyokuTimer>=HOGYOKU_DUR){
-            hogyokuAtivo=false; hogyokuCooldown=HOGYOKU_CD_MAX;
-            ryoikiLimpouOnda=true; ryoikiDelayTimer=0;
-            // ── ÁUDIO: para com fade ──
-            pararAudio();
-          }
+          if(hogyokuTimer>=HOGYOKU_DUR){hogyokuAtivo=false;hogyokuCooldown=HOGYOKU_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
         }
         if(hogyokuCooldown>0) hogyokuCooldown--;
       }
 
       // ── Avançar onda ──
       if(monstros.length===0&&!ryoikiAtivo&&!ryoikiLimpouOnda&&!invocAtivo&&!atomicAtivo&&!hogyokuAtivo){
-        if(ondaAtual<TOTAL_ONDAS){ondaAtual++;monstros=gerarOnda(ondaAtual);raioBossArr.length=0;projetilInimigos=[];}
-        else estadoJogo='vitoria';
+        if(ondaAtual<TOTAL_ONDAS){
+          ondaAtual++;monstros=gerarOnda(ondaAtual);raioBossArr.length=0;projetilInimigos=[];
+          if(souHostRef.current) socketRef.current?.emit('nova_onda',{ondaAtual});
+        } else estadoJogo='vitoria';
       }
 
       // ── Câmera ──
@@ -616,28 +688,20 @@ export default function Jogo2D() {
       ctx.translate(-camera.x,-camera.y);
 
       desenharCenarioEpico(ctx, WORLD_WIDTH, WORLD_HEIGHT, tick);
-
       Object.values(remotosRef.current).forEach(jr => desenharJogadorRemoto(ctx, jr, {guerreiro:imgGuerreiro,mago:imgMago,sombrio:imgSombrio,aizen:imgAizen,shadow:imgShadow}, tick));
 
       pocoes = pocoes.filter(p => {
         p.pulso += 0.06;
         desenharPocao(ctx, p);
-        const dxp = (player.x + 40) - p.x;
-        const dyp = (player.y + 40) - p.y;
-        if(Math.hypot(dxp, dyp) < POCAO_RAIO_COLETA){
-          playerHp = Math.min(status.hpMax, playerHp + p.cura);
+        if(Math.hypot((player.x+40)-p.x,(player.y+40)-p.y)<POCAO_RAIO_COLETA){
+          playerHp=Math.min(status.hpMax,playerHp+p.cura);
           explosoesArea.push({x:player.x+40,y:player.y+40,timer:0,maxTimer:25});
           return false;
         }
         return true;
       });
 
-      const estaInvulneravel =
-        (cl==='mago'    && ryoikiMagoAtivo) ||
-        (cl==='sombrio' && invocAtivo)      ||
-        (cl==='shadow'  && atomicAtivo)     ||
-        (cl==='aizen'   && (hogyokuAtivo || kyokaAtivo));
-
+      const estaInvulneravel=(cl==='mago'&&ryoikiMagoAtivo)||(cl==='sombrio'&&invocAtivo)||(cl==='shadow'&&atomicAtivo)||(cl==='aizen'&&(hogyokuAtivo||kyokaAtivo));
       const pcx=player.x+40, pcy=player.y+40;
       const monstrosParaRemover: number[] = [];
 
@@ -674,30 +738,24 @@ export default function Jogo2D() {
         } else {
           desenharSlime(ctx,m,tick);
         }
-        if(melee.ativo){const d=Math.hypot(pcx-(m.x+m.size/2),pcy-(m.y+m.size/2));if(d<(m.isBoss?150:100)){m.hp-=melee.dano/10;m.hitTimer=6;if(!m.isBoss){m.x+=Math.cos(player.direcaoRad)*10;m.y+=Math.sin(player.direcaoRad)*10;}}}
-        if(cl==='sombrio'&&corte.ativo){const cdx=(m.x+m.size/2)-pcx,cdy=(m.y+m.size/2)-pcy,cd=Math.hypot(cdx,cdy);if(cd<CORTE_ALC+m.size/2){let diff=Math.atan2(cdy,cdx)-corte.anguloBase;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;if(Math.abs(diff)<CORTE_LARG/2){m.hp-=CORTE_DANO*(1/corte.duracao);m.hitTimer=4;}}}
+        if(melee.ativo){const d=Math.hypot(pcx-(m.x+m.size/2),pcy-(m.y+m.size/2));if(d<(m.isBoss?150:100)){causarDano(m,melee.dano/10);if(!m.isBoss){m.x+=Math.cos(player.direcaoRad)*10;m.y+=Math.sin(player.direcaoRad)*10;}}}
+        if(cl==='sombrio'&&corte.ativo){const cdx=(m.x+m.size/2)-pcx,cdy=(m.y+m.size/2)-pcy,cd=Math.hypot(cdx,cdy);if(cd<CORTE_ALC+m.size/2){let diff=Math.atan2(cdy,cdx)-corte.anguloBase;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;if(Math.abs(diff)<CORTE_LARG/2){causarDano(m,CORTE_DANO*(1/corte.duracao));}}}
         if(m.hp<=0){registrarMorte(m);monstrosParaRemover.push(idx);}
       });
       for(let i=monstrosParaRemover.length-1;i>=0;i--) monstros.splice(monstrosParaRemover[i],1);
 
       raioBossArr=raioBossArr.filter(rb=>{
-        rb.vida--; rb.homingTimer++;
+        rb.vida--;rb.homingTimer++;
         if(rb.homingTimer>=10){rb.homingTimer=0;let diff=Math.atan2(pcy-rb.y,pcx-rb.x)-rb.angulo;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;rb.angulo+=diff*.22;rb.vx=Math.cos(rb.angulo)*RAIO_BOSS_VEL;rb.vy=Math.sin(rb.angulo)*RAIO_BOSS_VEL;}
-        rb.x+=rb.vx; rb.y+=rb.vy;
+        rb.x+=rb.vx;rb.y+=rb.vy;
         if(Math.hypot(rb.x-pcx,rb.y-pcy)<28){if(!estaInvulneravel){playerHp-=RAIO_BOSS_DANO;if(playerHp<=0)estadoJogo='gameover';}return false;}
         if(rb.vida<=0||rb.x<0||rb.x>WORLD_WIDTH||rb.y<0||rb.y>WORLD_HEIGHT)return false;
         const al=Math.min(1,rb.vida/20);
-        ctx.save(); ctx.globalAlpha=al;
-        ctx.strokeStyle='rgba(255,0,144,.3)'; ctx.lineWidth=14; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(rb.x-rb.vx*4,rb.y-rb.vy*4); ctx.lineTo(rb.x,rb.y); ctx.stroke();
-        ctx.strokeStyle='#ff6fff'; ctx.lineWidth=5;
-        ctx.beginPath(); ctx.moveTo(rb.x-rb.vx*3,rb.y-rb.vy*3); ctx.lineTo(rb.x,rb.y); ctx.stroke();
-        ctx.fillStyle='#ff6fff'; ctx.beginPath(); ctx.arc(rb.x,rb.y,5,0,Math.PI*2); ctx.fill();
-        ctx.globalAlpha=1; ctx.restore(); return true;
+        ctx.save();ctx.globalAlpha=al;ctx.strokeStyle='rgba(255,0,144,.3)';ctx.lineWidth=14;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(rb.x-rb.vx*4,rb.y-rb.vy*4);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.strokeStyle='#ff6fff';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(rb.x-rb.vx*3,rb.y-rb.vy*3);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.fillStyle='#ff6fff';ctx.beginPath();ctx.arc(rb.x,rb.y,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();return true;
       });
 
       projetilInimigos=projetilInimigos.filter(p=>{
-        p.vida--; p.x+=p.vx; p.y+=p.vy;
+        p.vida--;p.x+=p.vx;p.y+=p.vy;
         if(p.vida<=0||p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)return false;
         desenharProjetilInimigo(ctx,p);
         if(Math.hypot(p.x-pcx,p.y-pcy)<32){if(!estaInvulneravel){playerHp-=p.dano;if(playerHp<=0)estadoJogo='gameover';}return false;}
@@ -705,50 +763,50 @@ export default function Jogo2D() {
       });
 
       projetiisAliados=projetiisAliados.filter(p=>{
-        p.vida--; p.x+=p.vx; p.y+=p.vy;
+        p.vida--;p.x+=p.vx;p.y+=p.vy;
         if(p.vida<=0||p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)return false;
         desenharProjetilInimigo(ctx,p);
         let hit=false;
-        for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+10){m.hp-=p.dano;m.hitTimer=6;hit=true;break;}}
+        for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+10){causarDano(m,p.dano);hit=true;break;}}
         return !hit;
       });
 
       for(let i=projectiles.length-1;i>=0;i--){
-        const p=projectiles[i]; p.x+=p.vx; p.y+=p.vy;
+        const p=projectiles[i];p.x+=p.vx;p.y+=p.vy;
         if(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT){projectiles.splice(i,1);continue;}
         if(p.tipo==='guerreiro'){
           desenharProjetilGuerreiro(ctx,p);
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+16){m.hp-=p.dano;m.hitTimer=8;explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});projectiles.splice(i,1);break;}}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+16){causarDano(m,p.dano);explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});projectiles.splice(i,1);break;}}
           continue;
         }
         if(p.tipo==='sombrio'){
-          if(p.dp===undefined)p.dp=0; p.dp+=Math.hypot(p.vx,p.vy);
+          if(p.dp===undefined)p.dp=0;p.dp+=Math.hypot(p.vx,p.vy);
           desenharProjetilSombrio(ctx,p);
           let explodiu=false;
-          for(const m of monstros){if(explodiu)break;const d=Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2));if(d<m.size/2+16){explodiu=true;monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){alv.hp-=p.dano*(1-(da/SOMB_AREA)*.5);alv.hitTimer=8;}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}}
-          if(!explodiu&&(p.dp??0)>=SOMB_AREA*4){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){alv.hp-=p.dano*(1-(da/SOMB_AREA)*.5)*.6;alv.hitTimer=6;}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}
+          for(const m of monstros){if(explodiu)break;const d=Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2));if(d<m.size/2+16){explodiu=true;monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){causarDano(alv,p.dano*(1-(da/SOMB_AREA)*.5));}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}}
+          if(!explodiu&&(p.dp??0)>=SOMB_AREA*4){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){causarDano(alv,p.dano*(1-(da/SOMB_AREA)*.5)*.6);}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}
         } else if(p.tipo==='shadow_slash'){
-          ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angulo);
+          ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angulo);
           for(let t=1;t<=6;t++){ctx.globalAlpha=.4*(1-t/6);const sg=ctx.createRadialGradient(-t*9,0,0,-t*9,0,8);sg.addColorStop(0,'#d946ef');sg.addColorStop(1,'rgba(168,85,247,0)');ctx.fillStyle=sg;ctx.beginPath();ctx.arc(-t*9,0,8,0,Math.PI*2);ctx.fill();}
           ctx.globalAlpha=1;const sg2=ctx.createRadialGradient(0,0,0,0,0,14);sg2.addColorStop(0,'#fff');sg2.addColorStop(.3,'#e879f9');sg2.addColorStop(.7,'#d946ef');sg2.addColorStop(1,'rgba(168,85,247,0)');ctx.shadowColor='#d946ef';ctx.shadowBlur=22;ctx.fillStyle=sg2;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.restore();
           let hitS=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+14){m.hp-=p.dano;m.hitTimer=8;explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});hitS=true;break;}}
-          if(hitS) projectiles.splice(i,1);
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+14){causarDano(m,p.dano);explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});hitS=true;break;}}
+          if(hitS)projectiles.splice(i,1);
         } else if(p.tipo==='ilusao'){
           desenharProjetilIlusao(ctx,p as any);
           let hitI=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){m.hp-=p.dano;m.hitTimer=10;ilusaoParticulas.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:ILUSAO_DUR});if(kyokaAtivo){monstros.forEach(alv=>{if(alv!==m&&Math.hypot((alv.x+alv.size/2)-(m.x+m.size/2),(alv.y+alv.size/2)-(m.y+m.size/2))<120){alv.hp-=p.dano*.5;alv.hitTimer=6;}});}hitI=true;break;}}
-          if(hitI) projectiles.splice(i,1);
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){causarDano(m,p.dano);ilusaoParticulas.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:ILUSAO_DUR});if(kyokaAtivo){monstros.forEach(alv=>{if(alv!==m&&Math.hypot((alv.x+alv.size/2)-(m.x+m.size/2),(alv.y+alv.size/2)-(m.y+m.size/2))<120){causarDano(alv,p.dano*.5);}});}hitI=true;break;}}
+          if(hitI)projectiles.splice(i,1);
         } else if((p as any).tipo==='hollow_purple'){
           ctx.save();
           for(let t=1;t<=10;t++){const tx=p.x-p.vx*t*0.65,ty=p.y-p.vy*t*0.65;const al=0.55*(1-t/10);const rs=26-t*2;if(rs<=0)continue;ctx.globalAlpha=al;const gr=ctx.createRadialGradient(tx,ty,0,tx,ty,rs);gr.addColorStop(0,'rgba(248,180,252,1)');gr.addColorStop(.4,'rgba(168,85,247,0.8)');gr.addColorStop(1,'rgba(109,40,217,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(tx,ty,rs,0,Math.PI*2);ctx.fill();}
           ctx.globalAlpha=1;const gp=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,30);gp.addColorStop(0,'#ffffff');gp.addColorStop(.15,'#f0abfc');gp.addColorStop(.5,'#a855f7');gp.addColorStop(.8,'#7c3aed');gp.addColorStop(1,'rgba(109,40,217,0)');ctx.shadowColor='#e879f9';ctx.shadowBlur=50;ctx.fillStyle=gp;ctx.beginPath();ctx.arc(p.x,p.y,30,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
           for(let sp=0;sp<6;sp++){const sa=tick*0.25+sp*(Math.PI*2/6);const sx2=p.x+Math.cos(sa)*42,sy2=p.y+Math.sin(sa)*42;const sg=ctx.createRadialGradient(sx2,sy2,0,sx2,sy2,5);sg.addColorStop(0,'rgba(255,255,255,0.9)');sg.addColorStop(1,'rgba(168,85,247,0)');ctx.fillStyle=sg;ctx.beginPath();ctx.arc(sx2,sy2,5,0,Math.PI*2);ctx.fill();}
           ctx.restore();
-          for(let mi=monstros.length-1;mi>=0;mi--){const m=monstros[mi];if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+30){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<200+alv.size/2){alv.hp-=HOLLOW_DANO*(1-da/200*.5);alv.hitTimer=12;}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:60});projectiles.splice(i,1);break;}}
+          for(let mi=monstros.length-1;mi>=0;mi--){const m=monstros[mi];if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+30){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<200+alv.size/2){causarDano(alv,HOLLOW_DANO*(1-da/200*.5));}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:60});projectiles.splice(i,1);break;}}
         } else if(p.tipo==='mago'){
           ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angulo);if(imgArmaMago)ctx.drawImage(imgArmaMago,-20,-20,40,40);ctx.restore();
-          let hit=false;for(const m of monstros){if(p.x>m.x&&p.x<m.x+m.size&&p.y>m.y&&p.y<m.y+m.size){m.hp-=p.dano/5;m.hitTimer=6;hit=true;break;}}
+          let hit=false;for(const m of monstros){if(p.x>m.x&&p.x<m.x+m.size&&p.y>m.y&&p.y<m.y+m.size){causarDano(m,p.dano/5);hit=true;break;}}
           if(hit)projectiles.splice(i,1);
         } else if(p.tipo==='red'){
           ctx.save();
@@ -756,8 +814,8 @@ export default function Jogo2D() {
           for(let t=1;t<=8;t++){const tx=p.x-p.vx*t*0.5,ty=p.y-p.vy*t*0.5;ctx.globalAlpha=0.4*(1-t/8);const tg=ctx.createRadialGradient(tx,ty,0,tx,ty,rp*(1-t/10));tg.addColorStop(0,'rgba(255,80,0,1)');tg.addColorStop(1,'rgba(200,0,0,0)');ctx.fillStyle=tg;ctx.beginPath();ctx.arc(tx,ty,rp*(1-t/10),0,Math.PI*2);ctx.fill();}
           ctx.globalAlpha=1;ctx.shadowColor='#ff2200';ctx.shadowBlur=30;const rg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,rp);rg.addColorStop(0,'#ffffff');rg.addColorStop(0.2,'#ffaa00');rg.addColorStop(0.6,'#ff2200');rg.addColorStop(1,'rgba(180,0,0,0)');ctx.fillStyle=rg;ctx.beginPath();ctx.arc(p.x,p.y,rp,0,Math.PI*2);ctx.fill();ctx.globalAlpha=0.5+Math.sin(tick*0.5)*0.2;ctx.strokeStyle='#ff4400';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,rp+4+Math.sin(tick*0.4)*2,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
           let hitRed=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){m.hp-=p.dano;m.hitTimer=10;monstros.forEach(alv=>{const dd=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(dd<RED_RAIO_EXPLO+alv.size/2){const ka=Math.atan2((alv.y+alv.size/2)-p.y,(alv.x+alv.size/2)-p.x);const force=(1-dd/RED_RAIO_EXPLO)*18;alv.x+=Math.cos(ka)*force;alv.y+=Math.sin(ka)*force;if(alv!==m){alv.hp-=p.dano*0.3;alv.hitTimer=6;}}});redExplosoes.push({x:p.x,y:p.y,timer:0,maxTimer:25});projectiles.splice(i,1);hitRed=true;break;}}
-          if(!hitRed&&(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)){projectiles.splice(i,1);}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){causarDano(m,p.dano);monstros.forEach(alv=>{const dd=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(dd<RED_RAIO_EXPLO+alv.size/2){const ka=Math.atan2((alv.y+alv.size/2)-p.y,(alv.x+alv.size/2)-p.x);const force=(1-dd/RED_RAIO_EXPLO)*18;alv.x+=Math.cos(ka)*force;alv.y+=Math.sin(ka)*force;if(alv!==m)causarDano(alv,p.dano*0.3);}});redExplosoes.push({x:p.x,y:p.y,timer:0,maxTimer:25});projectiles.splice(i,1);hitRed=true;break;}}
+          if(!hitRed&&(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT))projectiles.splice(i,1);
         }
       }
 
@@ -769,31 +827,19 @@ export default function Jogo2D() {
         ctx.shadowBlur=0;ctx.restore();
       });
 
-      if(melee.ativo){
-        melee.duracao--;melee.anguloAtual+=Math.PI/20;
-        ctx.save();ctx.translate(pcx,pcy);ctx.rotate(melee.anguloAtual);
-        if(imgArmaGuerr)ctx.drawImage(imgArmaGuerr,45,-35,70,70);
-        ctx.strokeStyle='rgba(251,191,36,.25)';ctx.lineWidth=8;ctx.beginPath();ctx.arc(0,0,75,melee.anguloAtual-Math.PI*.6,melee.anguloAtual);ctx.stroke();
-        ctx.restore();if(melee.duracao<=0)melee.ativo=false;
-      }
+      if(melee.ativo){melee.duracao--;melee.anguloAtual+=Math.PI/20;ctx.save();ctx.translate(pcx,pcy);ctx.rotate(melee.anguloAtual);if(imgArmaGuerr)ctx.drawImage(imgArmaGuerr,45,-35,70,70);ctx.strokeStyle='rgba(251,191,36,.25)';ctx.lineWidth=8;ctx.beginPath();ctx.arc(0,0,75,melee.anguloAtual-Math.PI*.6,melee.anguloAtual);ctx.stroke();ctx.restore();if(melee.duracao<=0)melee.ativo=false;}
       if(raioAtivo){raioTimer++;desenharRaio(ctx,raioAlvo.x,raioAlvo.y,raioTimer/RAIO_DUR);if(raioTimer>=RAIO_DUR)raioAtivo=false;}
       if(furacaoAtivo&&cl==='guerreiro')desenharFuracao(ctx,player.x,player.y,furacaoAngulo,furacaoTimer,imgArmaGuerr);
       aliados.forEach(a=>desenharAliado(ctx,a,tick));
       if(cl==='sombrio'&&corte.ativo){corte.timer++;desenharCorteSombrio(ctx,player.x,player.y,corte.anguloBase,corte.timer,corte.duracao);if(corte.timer>=corte.duracao)corte.ativo=false;}
-      if(cl==='shadow'){
-        if(shadowSlashAtivo) desenharShadowSlash(ctx,player.x,player.y,shadowSlashAngulo,shadowSlashTimer,SHADOW_SLASH_DUR);
-        if(ebonyAtivo) desenharEbonySwirl(ctx,player.x,player.y,tick,ebonyTimer);
-      }
+      if(cl==='shadow'){if(shadowSlashAtivo)desenharShadowSlash(ctx,player.x,player.y,shadowSlashAngulo,shadowSlashTimer,SHADOW_SLASH_DUR);if(ebonyAtivo)desenharEbonySwirl(ctx,player.x,player.y,tick,ebonyTimer);}
       if(cl==='mago'&&hollowFase==='carregando'){
-        const eb=hollowEsferaAzul;
-        ctx.save();ctx.globalAlpha=eb.alpha;ctx.shadowColor='#3b82f6';ctx.shadowBlur=35;
-        const gbAzul=ctx.createRadialGradient(eb.x,eb.y,0,eb.x,eb.y,22);gbAzul.addColorStop(0,'#ffffff');gbAzul.addColorStop(.25,'#bfdbfe');gbAzul.addColorStop(.6,'#3b82f6');gbAzul.addColorStop(1,'rgba(37,99,235,0)');ctx.fillStyle=gbAzul;ctx.beginPath();ctx.arc(eb.x,eb.y,22,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(96,165,250,${0.7*eb.alpha})`;ctx.lineWidth=2;ctx.shadowBlur=15;ctx.beginPath();ctx.arc(eb.x,eb.y,28+Math.sin(tick*0.5)*4,0,Math.PI*2);ctx.stroke();ctx.restore();
-        const ev=hollowEsferaVerm;
-        ctx.save();ctx.globalAlpha=ev.alpha;ctx.shadowColor='#ef4444';ctx.shadowBlur=35;const gbVerm=ctx.createRadialGradient(ev.x,ev.y,0,ev.x,ev.y,22);gbVerm.addColorStop(0,'#ffffff');gbVerm.addColorStop(.25,'#fecaca');gbVerm.addColorStop(.6,'#ef4444');gbVerm.addColorStop(1,'rgba(220,38,38,0)');ctx.fillStyle=gbVerm;ctx.beginPath();ctx.arc(ev.x,ev.y,22,0,Math.PI*2);ctx.fill();ctx.restore();
+        const eb=hollowEsferaAzul;ctx.save();ctx.globalAlpha=eb.alpha;ctx.shadowColor='#3b82f6';ctx.shadowBlur=35;const gbAzul=ctx.createRadialGradient(eb.x,eb.y,0,eb.x,eb.y,22);gbAzul.addColorStop(0,'#ffffff');gbAzul.addColorStop(.25,'#bfdbfe');gbAzul.addColorStop(.6,'#3b82f6');gbAzul.addColorStop(1,'rgba(37,99,235,0)');ctx.fillStyle=gbAzul;ctx.beginPath();ctx.arc(eb.x,eb.y,22,0,Math.PI*2);ctx.fill();ctx.strokeStyle=`rgba(96,165,250,${0.7*eb.alpha})`;ctx.lineWidth=2;ctx.shadowBlur=15;ctx.beginPath();ctx.arc(eb.x,eb.y,28+Math.sin(tick*0.5)*4,0,Math.PI*2);ctx.stroke();ctx.restore();
+        const ev=hollowEsferaVerm;ctx.save();ctx.globalAlpha=ev.alpha;ctx.shadowColor='#ef4444';ctx.shadowBlur=35;const gbVerm=ctx.createRadialGradient(ev.x,ev.y,0,ev.x,ev.y,22);gbVerm.addColorStop(0,'#ffffff');gbVerm.addColorStop(.25,'#fecaca');gbVerm.addColorStop(.6,'#ef4444');gbVerm.addColorStop(1,'rgba(220,38,38,0)');ctx.fillStyle=gbVerm;ctx.beginPath();ctx.arc(ev.x,ev.y,22,0,Math.PI*2);ctx.fill();ctx.restore();
         ctx.save();ctx.globalAlpha=Math.min(eb.alpha,ev.alpha)*0.45;ctx.strokeStyle='#e879f9';ctx.lineWidth=1.5;ctx.setLineDash([5,5]);ctx.shadowColor='#e879f9';ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(eb.x,eb.y);ctx.lineTo(ev.x,ev.y);ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();
       }
 
-      desenharMarcacaoJogador(ctx, player.x, player.y, player.size, '#22c55e', tick, status.nome);
+      desenharMarcacaoJogador(ctx,player.x,player.y,player.size,'#22c55e',tick,status.nome);
       if(imgPlayer)ctx.drawImage(imgPlayer,player.x,player.y,player.size,player.size);
       else{ctx.fillStyle=player.color;ctx.fillRect(player.x,player.y,player.size,player.size);}
 
@@ -804,42 +850,42 @@ export default function Jogo2D() {
         ctx.strokeStyle='#e879f9';ctx.lineWidth=2.5;ctx.shadowColor='#e879f9';ctx.shadowBlur=15;ctx.beginPath();ctx.arc(pcx,pcy,55+Math.sin(tick*0.15)*5,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
       }
 
-      ctx.restore(); // fim câmera
+      ctx.restore();
 
       // ════ CUTSCENES ════
-      if(ryoikiAtivo&&cl==='guerreiro') desenharRyoikiTenkai(ctx,ryoikiTimer,tick,canvas.width,canvas.height,slashesDomain,ondaAtual);
+      if(ryoikiAtivo&&cl==='guerreiro')desenharRyoikiTenkai(ctx,ryoikiTimer,tick,canvas.width,canvas.height,slashesDomain,ondaAtual);
       if(ryoikiMagoAtivo&&cl==='mago'){
         const fadeIn=Math.min(1,ryoikiMagoTimer/50),fadeOut=ryoikiMagoTimer>RYOIKI_M_DUR-60?Math.max(0,1-(ryoikiMagoTimer-(RYOIKI_M_DUR-60))/60):1,alpha=fadeIn*fadeOut;
-        const cx2=canvas.width/2,cy2=canvas.height/2;
+        const cx2=canvas.width/2;
         ctx.save();ctx.globalAlpha=alpha*0.96;ctx.fillStyle='#000000';ctx.fillRect(0,0,canvas.width,canvas.height);
-        for(let ring=0;ring<10;ring++){const rBase=35+ring*52,segs=80,rotDir=ring%2===0?1:-1,speed=0.003+ring*0.0008;for(let s=0;s<segs;s++){const a1=(s/segs)*Math.PI*2+tick*speed*rotDir,a2=((s+1)/segs)*Math.PI*2+tick*speed*rotDir;const wave=Math.sin(a1*4+tick*0.025)*7,r1=rBase+wave;const x1=cx2+Math.cos(a1)*r1,y1=cy2+Math.sin(a1)*r1*0.52;const x2=cx2+Math.cos(a2)*(rBase+Math.sin(a2*4+tick*0.025)*7),y2=cy2+Math.sin(a2)*(rBase+Math.sin(a2*4+tick*0.025)*7)*0.52;const hue=265+ring*10+Math.sin(tick*0.025)*25,lum=50+ring*3;const opa=(0.06+0.08*Math.sin(tick*0.04+ring))*alpha;ctx.strokeStyle=`hsla(${hue},75%,${lum}%,${opa})`;ctx.lineWidth=ring<3?2:1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}}
+        for(let ring=0;ring<10;ring++){const rBase=35+ring*52,segs=80,rotDir=ring%2===0?1:-1,speed=0.003+ring*0.0008;for(let s=0;s<segs;s++){const a1=(s/segs)*Math.PI*2+tick*speed*rotDir,a2=((s+1)/segs)*Math.PI*2+tick*speed*rotDir;const wave=Math.sin(a1*4+tick*0.025)*7,r1=rBase+wave;const x1=cx2+Math.cos(a1)*r1,y1=canvas.height/2+Math.sin(a1)*r1*0.52;const x2=cx2+Math.cos(a2)*(rBase+Math.sin(a2*4+tick*0.025)*7),y2=canvas.height/2+Math.sin(a2)*(rBase+Math.sin(a2*4+tick*0.025)*7)*0.52;const hue=265+ring*10+Math.sin(tick*0.025)*25,lum=50+ring*3;const opa=(0.06+0.08*Math.sin(tick*0.04+ring))*alpha;ctx.strokeStyle=`hsla(${hue},75%,${lum}%,${opa})`;ctx.lineWidth=ring<3?2:1.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}}
         floatingInfos.forEach(fi=>{fi.y+=fi.vy;fi.alpha-=0.0025;if(fi.y<-20||fi.alpha<=0){fi.y=canvas.height+10;fi.x=Math.random()*canvas.width;fi.alpha=0.35+Math.random()*0.55;fi.txt=infoTexts[Math.floor(Math.random()*infoTexts.length)];}ctx.save();ctx.globalAlpha=fi.alpha*alpha;ctx.font=`bold ${7+Math.random()*5}px monospace`;ctx.textAlign='center';ctx.fillStyle=fi.color;ctx.shadowColor=fi.color;ctx.shadowBlur=8;ctx.fillText(fi.txt,fi.x,fi.y);ctx.restore();});
         const textFade=Math.min(1,ryoikiMagoTimer/35)*fadeOut;
         ctx.save();ctx.globalAlpha=textFade;ctx.textAlign='center';ctx.font='bold 32px serif';ctx.shadowColor='#e879f9';ctx.shadowBlur=30;ctx.fillStyle='#ffffff';ctx.fillText('領域展開',cx2,68);ctx.font='bold 20px monospace';ctx.fillStyle='#e879f9';ctx.shadowBlur=18;ctx.fillText('Ryōiki Tenkai',cx2,95);ctx.font='bold 15px monospace';ctx.fillStyle='#c084fc';ctx.shadowBlur=12;ctx.fillText('無量空処 — O Vazio Ilimitado',cx2,118);ctx.font='bold 11px monospace';ctx.fillStyle='#fae8ff';ctx.shadowColor='#e879f9';ctx.shadowBlur=10;ctx.fillText('🛡 INVULNERÁVEL',cx2,145);ctx.shadowBlur=0;ctx.restore();
         if(ryoikiMagoKilled){const kFade=Math.min(1,(ryoikiMagoTimer-RYOIKI_M_KILL_T)/30)*fadeOut;ctx.save();ctx.globalAlpha=kFade;ctx.textAlign='center';ctx.font='bold 14px monospace';ctx.fillStyle='#fae8ff';ctx.shadowColor='#e879f9';ctx.shadowBlur=18;ctx.fillText('— Todos os alvos: paralisados. —',cx2,canvas.height-38);ctx.shadowBlur=0;ctx.restore();}
         ctx.globalAlpha=1;ctx.restore();
       }
-      if(ariseAtivo&&cl==='sombrio') desenharAriseCutscene(ctx,ariseTimer,tick,canvas.width,canvas.height,ariseParticulas,ariseAliados);
-      if(invocAtivo&&cl==='sombrio') desenharInvocacaoUltimate(ctx,invocTimer,tick,canvas.width,canvas.height,invocParticulas,invocKilled,igrisPos,beruPos);
-      if(atomicAtivo&&cl==='shadow') desenharIAmAtomic(ctx,atomicTimer,tick,canvas.width,canvas.height,atomicParticulas,atomicTimer<80?'charge':atomicTimer<160?'release':'blast');
-      if(kyokaAtivo&&cl==='aizen')   desenharKyokaSuigetsu(ctx,kyokaTimer,tick,canvas.width,canvas.height,player.x,player.y);
-      if(hogyokuAtivo&&cl==='aizen') desenharHogyokuFusion(ctx,hogyokuTimer,tick,canvas.width,canvas.height,hogyokuParticulas,hogyokuKilled);
+      if(ariseAtivo&&cl==='sombrio')desenharAriseCutscene(ctx,ariseTimer,tick,canvas.width,canvas.height,ariseParticulas,ariseAliados);
+      if(invocAtivo&&cl==='sombrio')desenharInvocacaoUltimate(ctx,invocTimer,tick,canvas.width,canvas.height,invocParticulas,invocKilled,igrisPos,beruPos);
+      if(atomicAtivo&&cl==='shadow')desenharIAmAtomic(ctx,atomicTimer,tick,canvas.width,canvas.height,atomicParticulas,atomicTimer<80?'charge':atomicTimer<160?'release':'blast');
+      if(kyokaAtivo&&cl==='aizen')desenharKyokaSuigetsu(ctx,kyokaTimer,tick,canvas.width,canvas.height,player.x,player.y);
+      if(hogyokuAtivo&&cl==='aizen')desenharHogyokuFusion(ctx,hogyokuTimer,tick,canvas.width,canvas.height,hogyokuParticulas,hogyokuKilled);
 
       // ════ UI HUD ════
-      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(18,canvas.height-44,204,22);
-      const hpG=ctx.createLinearGradient(20,0,220,0);
-      hpG.addColorStop(0,'#7f1d1d');hpG.addColorStop(.5,'#ef4444');hpG.addColorStop(1,'#fca5a5');
-      ctx.fillStyle=hpG; ctx.fillRect(20,canvas.height-42,(Math.max(0,playerHp)/status.hpMax)*200,18);
-      ctx.fillStyle='white'; ctx.font='bold 11px monospace'; ctx.textAlign='left';
+      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(18,canvas.height-44,204,22);
+      const hpG=ctx.createLinearGradient(20,0,220,0);hpG.addColorStop(0,'#7f1d1d');hpG.addColorStop(.5,'#ef4444');hpG.addColorStop(1,'#fca5a5');
+      ctx.fillStyle=hpG;ctx.fillRect(20,canvas.height-42,(Math.max(0,playerHp)/status.hpMax)*200,18);
+      ctx.fillStyle='white';ctx.font='bold 11px monospace';ctx.textAlign='left';
       ctx.fillText(`❤ ${Math.floor(Math.max(0,playerHp))} / ${status.hpMax}`,26,canvas.height-29);
       if(online){ctx.font='bold 10px monospace';ctx.textAlign='right';ctx.fillStyle='#4ade80';ctx.fillText(`🌐 ${qtJog}P`,canvas.width-10,20);}
-      ctx.font='bold 18px serif'; ctx.textAlign='left';
-      const isBossWave=ondaAtual%5===0, isFinalWave=ondaAtual===TOTAL_ONDAS;
+      if(souHostRef.current&&online){ctx.font='bold 9px monospace';ctx.textAlign='right';ctx.fillStyle='#fbbf24';ctx.fillText('👑 HOST',canvas.width-10,34);}
+      ctx.font='bold 18px serif';ctx.textAlign='left';
+      const isBossWave=ondaAtual%5===0,isFinalWave=ondaAtual===TOTAL_ONDAS;
       ctx.fillStyle=isFinalWave?'#ff6fff':isBossWave?'#fca5a5':'#e2e8f0';
-      ctx.shadowColor=isFinalWave?'#ff0090':isBossWave?'#dc2626':'#7c3aed'; ctx.shadowBlur=12;
-      ctx.fillText(isFinalWave?'💀 BOSS FINAL !! 💀':isBossWave?`⚠ ONDA ${ondaAtual} — BOSS ⚠`:`⚔ ONDA ${ondaAtual} / ${TOTAL_ONDAS}`,20,38); ctx.shadowBlur=0;
+      ctx.shadowColor=isFinalWave?'#ff0090':isBossWave?'#dc2626':'#7c3aed';ctx.shadowBlur=12;
+      ctx.fillText(isFinalWave?'💀 BOSS FINAL !! 💀':isBossWave?`⚠ ONDA ${ondaAtual} — BOSS ⚠`:`⚔ ONDA ${ondaAtual} / ${TOTAL_ONDAS}`,20,38);ctx.shadowBlur=0;
       if(pocoes.length>0){ctx.font='bold 10px monospace';ctx.textAlign='left';ctx.fillStyle='#4ade80';ctx.shadowColor='#4ade80';ctx.shadowBlur=6;ctx.fillText(`✚ ${pocoes.length} poção${pocoes.length>1?'ões':''} no mapa`,20,canvas.height-56);ctx.shadowBlur=0;}
-      desenharMinimapa(ctx, player.x, player.y, monstros, remotosRef.current, pocoes, WORLD_WIDTH, WORLD_HEIGHT, canvas.width, canvas.height, tick);
+      desenharMinimapa(ctx,player.x,player.y,monstros,remotosRef.current,pocoes,WORLD_WIDTH,WORLD_HEIGHT,canvas.width,canvas.height,tick);
 
       // ════ UI por classe ════
       if(cl==='mago'){
@@ -960,8 +1006,9 @@ export default function Jogo2D() {
       canvas.removeEventListener('mousemove', onMouse);
       canvas.removeEventListener('mousedown', onMouseDown);
       cancelAnimationFrame(animId);
-      // Para o áudio ao desmontar o componente
       pararAudio(0);
+      const s = socketRef.current;
+      if(s){s.off('monstros_atualizados');s.off('aplicar_dano');s.off('onda_mudou');}
     };
   }, [status, imgPlayer, imgArmaGuerr, imgArmaMago, imgGuerreiro, imgMago, imgSombrio, imgShadow, imgAizen]);
 

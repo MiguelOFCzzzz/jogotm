@@ -7,10 +7,10 @@ import { useRouter } from 'next/navigation';
 // Mapa de cor por classe (sincronizado com costumização)
 const COR_CLASSE: Record<string, string> = {
   guerreiro: '#ef4444',
-  mago:      '#a855f7',
+  mago:      '#24dddd',
   sombrio:   '#6366f1',
-  shadow:    '#22d3ee',
-  aizen:     '#fbbf24',
+  shadow:    '#b700ff',
+  aizen:     '#ffffff',
 };
 
 const NOME_CLASSE: Record<string, string> = {
@@ -98,7 +98,7 @@ export default function RpgLobby() {
     { id: 'guerreiro', emoji: '👑', nome: 'SUKUNA' },
     { id: 'mago',      emoji: '🤞', nome: 'GOJO'   },
     { id: 'sombrio',   emoji: '💀', nome: 'JIN-WOO'},
-    { id: 'shadow',    emoji: '🌑', nome: 'SHADOW', mitico: true },
+    { id: 'shadow',    emoji: '☢️', nome: 'SHADOW', mitico: true },
     { id: 'aizen',     emoji: '🪞', nome: 'AIZEN',  mitico: true },
   ];
 
@@ -152,7 +152,7 @@ export default function RpgLobby() {
                   <label className="text-sm font-semibold text-red-200/70 uppercase">Identidade</label>
                   <input 
                     type="text" value={nome} onChange={(e) => setNome(e.target.value)}
-                    placeholder="Ex: Malachai"
+                    placeholder="Ex: Itadori Yuji"
                     className="w-full bg-black/60 border border-red-900/30 p-4 rounded-lg text-white focus:border-red-500 outline-none transition-all"
                   />
                 </div>

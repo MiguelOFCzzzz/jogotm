@@ -1,6 +1,9 @@
 const mysql = require('mysql2/promise');
 const io = require('socket.io')(3001, {
-  cors: { origin: "http://localhost:3000" }
+  cors: { 
+    origin: "*", // O asterisco libera a entrada para qualquer IP!
+    methods: ["GET", "POST"]
+  }
 });
 
 const dbConfig = {

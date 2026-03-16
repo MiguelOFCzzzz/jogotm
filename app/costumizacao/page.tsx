@@ -20,7 +20,7 @@ const CLASSES: Classe[] = [
   },
   { 
     id: 'mago', nome: 'GOJO', 
-    descricao: 'HOLLOW PURPLE...',
+    descricao: 'MURYO KUSHO...',
     imagem: '🤞', 
     atributos: { str: 2, agi: 5, int: 10, vit: 4 } 
   },
@@ -34,7 +34,7 @@ const CLASSES: Classe[] = [
     id: 'shadow',
     nome: 'CID KAGENOU',
     descricao: 'I AM ATOMIC...',
-    imagem: '🌑',
+    imagem: '☢️',
     atributos: { str: 7, agi: 9, int: 6, vit: 5 },
   },
   {
@@ -49,7 +49,7 @@ const CLASSES: Classe[] = [
 // Badge de raridade por classe
 const RARIDADE: Record<string, { label: string; cor: string }> = {
   guerreiro: { label: 'LENDÁRIO', cor: '#ef4444' },
-  mago:      { label: 'LENDÁRIO', cor: '#a855f7' },
+  mago:      { label: 'LENDÁRIO', cor: '#55f7f4' },
   sombrio:   { label: 'LENDÁRIO', cor: '#6366f1' },
   shadow:    { label: 'MÍTICO',   cor: '#22d3ee' },
   aizen:     { label: 'MÍTICO',   cor: '#fbbf24' },
@@ -116,10 +116,10 @@ function ConteudoCostumizacao() {
   // Cor de destaque por classe (usada em vários lugares)
   const COR: Record<string, string> = {
     guerreiro: '#ef4444',
-    mago:      '#a855f7',
+    mago:      '#24dddd',
     sombrio:   '#6366f1',
-    shadow:    '#22d3ee',
-    aizen:     '#fbbf24',
+    shadow:    '#b700ff',
+    aizen:     '#ffffff',
   };
   const corAtual = COR[classeSel.id] ?? '#ef4444';
 
@@ -292,7 +292,7 @@ function ConteudoCostumizacao() {
                 </>}
                 {classeSel.id === 'aizen' && <>
                   <div>⠀🪞 <span className="text-white/70">Ilusão</span> — Clique</div>
-                  <div>⠀✨ <span className="text-white/70">Kyōka Suigetsu</span> — Z</div>
+                  <div>⠀✨ <span className="text-white/70">Hado 90</span> — Z</div>
                   <div>⠀🌑 <span className="text-white/70">Hōgyoku Fusion</span> — X</div>
                 </>}
               </div>
