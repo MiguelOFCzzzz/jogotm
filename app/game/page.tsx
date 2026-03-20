@@ -10,6 +10,8 @@ import {
   SLIME_PALETAS, PALETA_ARQUEIRO, PALETA_TANQUE, PALETA_VELOC, PALETA_MAGO_INI,
   iconeTipo,
   desenharJogadorRemoto, desenharSlime, desenharFinalBoss,
+  desenharRimuruBoss, desenharRimuruCutscene,
+  RIMURU_HP_FASE1, RIMURU_HP_FASE2, RIMURU_CUTSCENE_DUR, RIMURU_IMG_URL,
   desenharProjetilInimigo, desenharAliado, desenharCorteSombrio,
   desenharProjetilSombrio, desenharProjetilGuerreiro, desenharExplosaoArea,
   desenharRaio, desenharFuracao, desenharRyoikiTenkai, desenharTransicaoOnda,
@@ -29,11 +31,19 @@ import { precarregarAudios, tocarUltimate, pararAudio } from './audio-manager';
 
 const WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 
-function useImagem(src: string | null) {
+// ── Onda 10 é o BOSS FINAL (Rimuru) ──
+const TOTAL_ONDAS = 10;
+
+// ── Fator de dano de ULT na onda do Rimuru (50% do normal) ──
+const ULT_DANO_RIMURU_FATOR = 0.5;
+
+function useImagem(src: string | null, semCors = false) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!src) return;
-    const i = new Image(); i.crossOrigin = 'anonymous'; i.src = src;
+    const i = new Image();
+    if (!semCors) i.crossOrigin = 'anonymous';
+    i.src = src;
     i.onload = () => setImg(i);
   }, [src]);
   return img;
@@ -66,6 +76,7 @@ export default function Jogo2D() {
     aizen:  'https://i.redd.it/new-arts-included-in-the-official-site-nel-ryuuken-aizen-v0-zprai0ll000a1.png?width=1050&format=png&auto=webp&s=216deeafb4a03fff1043c5d7a2e66f622486a83b',
   };
 
+  const imgRimuru    = useImagem(RIMURU_IMG_URL, true); // sem crossOrigin — pnganime bloqueia CORS
   const imgPlayer    = useImagem(LINKS[status.classe] ?? null);
   const imgArmaGuerr = useImagem('https://png.pngtree.com/png-clipart/20211018/ourmid/pngtree-fire-burning-realistic-red-flame-png-image_3977689.png');
   const imgArmaMago  = useImagem('https://toppng.com/uploads/preview/pixel-fireball-fireball-pixel-art-115631306101ozjjztwry.png');
@@ -76,108 +87,34 @@ export default function Jogo2D() {
   const imgAizen     = useImagem(LINKS.aizen  ?? null);
 
   // ── Socket.io ──
+  useEffect(() => {
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const s = io(`http://${host}:3001`, { transports: ['websocket'] });
+    socketRef.current = s;
+    const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
 
-useEffect(() => {
+    s.on('connect', () => {
+      setOnline(true);
+      s.emit('entrar_no_jogo', { codigo: codigoSala, nome: status.nome, classe: status.classe, x: 1500, y: 1000 });
+    });
+    s.on('disconnect', () => setOnline(false));
+    s.on('lista_jogadores', (lista: JogadorRemoto[]) => {
+      lista.forEach(j => { if (j.id !== s.id) remotosRef.current[j.id] = j; });
+      setQtJog(1 + Object.keys(remotosRef.current).length);
+    });
+    s.on('novo_jogador_conectado', (j: JogadorRemoto) => { remotosRef.current[j.id] = j; setQtJog(q => q + 1); });
+    s.on('jogador_moveu', (d: { id:string; x:number; y:number; direcaoRad:number }) => {
+      if (remotosRef.current[d.id]) { remotosRef.current[d.id].x=d.x; remotosRef.current[d.id].y=d.y; remotosRef.current[d.id].direcaoRad=d.direcaoRad; }
+    });
+    s.on('hp_jogador', (d: { id:string; hp:number; hpMax:number }) => {
+      if (remotosRef.current[d.id]) { remotosRef.current[d.id].hp=d.hp; remotosRef.current[d.id].hpMax=d.hpMax; }
+    });
+    s.on('jogador_saiu', (id: string) => { delete remotosRef.current[id]; setQtJog(q => Math.max(1, q - 1)); });
+    s.on('voce_e_host', (val: boolean) => { souHostRef.current = val; });
+    s.on('novo_host', (id: string) => { if (s.id === id) souHostRef.current = true; });
+    return () => { s.disconnect(); };
+  }, [status.nome, status.classe]);
 
-  // Detecta o IP de quem está acessando a página automaticamente (evita o erro do localhost)
-
-  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-
-  const s = io(`http://${host}:3001`, { transports: ['websocket'] });
-
-
-
-  socketRef.current = s;
-
-  const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
-
-
-
-  s.on('connect', () => {
-
-    setOnline(true);
-
-    console.log("Conectado ao servidor no host:", host);
-
-    s.emit('entrar_no_jogo', { codigo: codigoSala, nome: status.nome, classe: status.classe, x: 1500, y: 1000 });
-
-  });
-
-
-
-  s.on('disconnect', () => setOnline(false));
-
-
-
-  s.on('lista_jogadores', (lista: JogadorRemoto[]) => {
-
-    lista.forEach(j => { if (j.id !== s.id) remotosRef.current[j.id] = j; });
-
-    setQtJog(1 + Object.keys(remotosRef.current).length);
-
-  });
-
-
-
-  s.on('novo_jogador_conectado', (j: JogadorRemoto) => {
-
-    remotosRef.current[j.id] = j;
-
-    setQtJog(q => q + 1);
-
-  });
-
-
-
-  s.on('jogador_moveu', (d: { id:string; x:number; y:number; direcaoRad:number }) => {
-
-    if (remotosRef.current[d.id]) {
-
-      remotosRef.current[d.id].x=d.x;
-
-      remotosRef.current[d.id].y=d.y;
-
-      remotosRef.current[d.id].direcaoRad=d.direcaoRad;
-
-    }
-
-  });
-
-
-
-  s.on('hp_jogador', (d: { id:string; hp:number; hpMax:number }) => {
-
-    if (remotosRef.current[d.id]) {
-
-      remotosRef.current[d.id].hp=d.hp;
-
-      remotosRef.current[d.id].hpMax=d.hpMax;
-
-    }
-
-  });
-
-
-
-  s.on('jogador_saiu', (id: string) => {
-
-    delete remotosRef.current[id];
-
-    setQtJog(q => Math.max(1, q - 1));
-
-  });
-
-
-
-  s.on('voce_e_host', (val: boolean) => { souHostRef.current = val; });
-
-  s.on('novo_host', (id: string) => { if (s.id === id) souHostRef.current = true; });
-
-
-
-  return () => { s.disconnect(); };
-
-}, [status.nome, status.classe]); // Adicionei status.classe aqui por segurança, já que é usado no emit
   // ── Game loop ──
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -193,6 +130,12 @@ useEffect(() => {
     let contadorMorte = 0;
     let ryoikiLimpouOnda = false, ryoikiDelayTimer = 0;
 
+    // ── Estado do Rimuru ──
+    let rimuruCutsceneAtiva = false;
+    let rimuruCutsceneTimer = 0;
+    // rimuruFase é controlado diretamente no objeto monstro (m.rimuruFase)
+    // Quando a onda 10 começa, disparamos a cutscene antes de liberar o boss
+
     const RAIO_CD_MAX=600, RAIO_DANO=120+status.int*3, RAIO_DUR=40;
     let raioCooldown=0, raioAtivo=false, raioTimer=0, raioAlvo={x:0,y:0};
 
@@ -207,20 +150,20 @@ useEffect(() => {
     let raioBossArr: RaioBoss[] = [];
 
     const RESSURR_CD_MAX=1800, KILLS_NEEDED=5, MAX_SOMBRAS=8, MAX_ALIADOS=5;
-    const ALIADO_DANO=8, ALIADO_ALCANCE=55, ALIADO_CD=40;
-    const ALIADO_PROJ_DANO=12, ALIADO_PROJ_RANGE=350, ALIADO_PROJ_CD=80;
+    const ALIADO_DANO=12, ALIADO_ALCANCE=55, ALIADO_CD=40;
+    const ALIADO_PROJ_DANO=18, ALIADO_PROJ_RANGE=350, ALIADO_PROJ_CD=80;
     let ressurrCooldown=0, killsAcum=0;
     let sombrasFila: SombraGuardada[] = [];
     let aliados: SlimeAliado[] = [];
     let mortos: MonstroMorto[] = [];
     let projetiisAliados: ProjetilInimigo[] = [];
     let corte: CorteSomb = { ativo:false, timer:0, duracao:14, anguloBase:0 };
-    const CORTE_DANO=18+status.agi;
+    const CORTE_DANO=28+status.agi*1.5;
     let explosoesArea: ExplosaoArea[] = [];
     let syncMovTick=0;
     let syncMonstrosTick=0;
 
-    const HOLLOW_CD_MAX=900, HOLLOW_DANO=60;
+    const HOLLOW_CD_MAX=900, HOLLOW_DANO=88;
     const RYOIKI_M_CD_MAX=14400, RYOIKI_M_DUR=420, RYOIKI_M_KILL_T=180;
     let hollowCooldown=0, hollowFase: 'idle'|'carregando'|'disparando' = 'idle', hollowTimer=0;
     let hollowEsferaAzul = { x:0, y:0, alpha:0 };
@@ -229,10 +172,10 @@ useEffect(() => {
     const infoTexts = ['∞','∅','Ω','π','∂','Σ','∇','∆','λ','ξ','ψ','φ'];
     let floatingInfos: {x:number;y:number;vy:number;alpha:number;txt:string;color:string}[] = [];
 
-    const GUERR_PROJ_CD=20, GUERR_PROJ_VEL=14, GUERR_PROJ_DAN=35+status.str*2;
+    const GUERR_PROJ_CD=20, GUERR_PROJ_VEL=14, GUERR_PROJ_DAN=50+status.str*3;
     let guerrProjCooldown=0;
 
-    const RED_VEL=16, RED_DANO=25+Math.floor(status.int*1.2), RED_CD=25, RED_RAIO_EXPLO=60;
+    const RED_VEL=16, RED_DANO=38+Math.floor(status.int*1.8), RED_CD=25, RED_RAIO_EXPLO=60;
     let redCooldown=0;
     let redExplosoes: {x:number;y:number;timer:number;maxTimer:number}[] = [];
 
@@ -251,11 +194,11 @@ useEffect(() => {
     const EBONY_CD_MAX = 900;
     let atomicAtivo = false, atomicTimer = 0, atomicCooldown = 0;
     let atomicParticulas: { x:number; y:number; vx:number; vy:number; vida:number; r:number }[] = [];
-    const SHADOW_PROJ_VEL = 14, SHADOW_PROJ_DANO = 30 + status.agi * 2, SHADOW_PROJ_CD = 18;
+    const SHADOW_PROJ_VEL = 14, SHADOW_PROJ_DANO = 44 + status.agi * 3, SHADOW_PROJ_CD = 18;
     let shadowProjCooldown = 0;
 
     let ilusaoParticulas: IlusaoEfeito[] = [];
-    const ILUSAO_VEL = 15, ILUSAO_DANO = 25 + status.int, ILUSAO_CD = 22;
+    const ILUSAO_VEL = 15, ILUSAO_DANO = 38 + status.int * 1.5, ILUSAO_CD = 22;
     let ilusaoCooldown = 0;
     let kyokaAtivo = false, kyokaTimer = 0, kyokaCooldown = 0;
     let hogyokuAtivo = false, hogyokuTimer = 0, hogyokuCooldown = 0, hogyokuKilled = false;
@@ -267,19 +210,22 @@ useEffect(() => {
     const POCAO_RAIO_COLETA = 50;
 
     function gerarPocoesDaOnda(onda: number) {
-      const qt = Math.max(1, Math.floor(1 + onda * 0.35));
+      const qt = Math.max(1, Math.floor(1 + onda * 0.5));
       for (let i = 0; i < qt; i++) {
         pocoes.push({
           x: 100 + Math.random() * (WORLD_WIDTH  - 200),
           y: 100 + Math.random() * (WORLD_HEIGHT - 200),
           id: pocaoIdCounter++,
-          cura: POCAO_CURA_BASE + Math.floor(onda * 5),
+          cura: POCAO_CURA_BASE + Math.floor(onda * 8),
           pulso: Math.random() * Math.PI * 2,
         });
       }
     }
 
-    const TOTAL_ONDAS = 20;
+    // ── Retorna fator de dano de ult (0.5 na onda do Rimuru) ──
+    function fatorDanoUlt(): number {
+      return ondaAtual === TOTAL_ONDAS ? ULT_DANO_RIMURU_FATOR : 1.0;
+    }
 
     function criarMonstro(id:number, tipo:TipoInimigo, onda:number, x?:number, y?:number): Monstro {
       const rx = x ?? Math.random()*WORLD_WIDTH;
@@ -288,7 +234,8 @@ useEffect(() => {
       const defs: Record<string, { hpM:number; sizeM:number; pal:typeof op; cdMax:number }> = {
         normal:    { hpM:1.0, sizeM:1.0, pal:op,              cdMax:999 },
         arqueiro:  { hpM:0.6, sizeM:0.8, pal:PALETA_ARQUEIRO, cdMax:120 },
-        tanque:    { hpM:3.0, sizeM:1.6, pal:PALETA_TANQUE,   cdMax:999 },
+        // ── Tanque com HP e tamanho reduzidos (~50% do original) ──
+        tanque:    { hpM:1.4, sizeM:1.1, pal:PALETA_TANQUE,   cdMax:999 },
         velocista: { hpM:0.5, sizeM:0.7, pal:PALETA_VELOC,    cdMax:999 },
         mago_ini:  { hpM:0.8, sizeM:0.9, pal:PALETA_MAGO_INI, cdMax:160 },
       };
@@ -305,31 +252,52 @@ useEffect(() => {
       };
     }
 
+    // ── Cria o boss Rimuru com 2 fases ──
+    function criarRimuru(): Monstro {
+      return {
+        id: 9999,
+        x: WORLD_WIDTH / 2 - 60,
+        y: WORLD_HEIGHT / 2 - 60,
+        hp: RIMURU_HP_FASE1,
+        maxHp: RIMURU_HP_FASE1,
+        size: 120,
+        cor: '#0a0020',
+        corVariante: '#04000f',
+        corBrilho: '#a855f7',
+        corOlho: '#e9d5ff',
+        tipo: 'normal',
+        isBoss: true,
+        isFinalBoss: false,
+        isRimuru: true,
+        rimuruFase: 1,
+        breathe: 0, breatheDir: 1, breatheSpeed: 0.012,
+        hitTimer: 0, bubbletimer: 999,
+        ataqueCd: 60, ataqueCdMax: 60,
+        raioCooldown: 60,
+        megiddoCd: 0,
+      };
+    }
+
     function gerarOnda(onda: number): Monstro[] {
       gerarPocoesDaOnda(onda);
-      if (onda === 20) return [{
-        id:9999, x:WORLD_WIDTH/2, y:WORLD_HEIGHT/2, hp:22000, maxHp:22000, size:320,
-        cor:'#040008', corVariante:'#010003', corBrilho:'#ff00cc', corOlho:'#ff88ff',
-        tipo:'normal', isBoss:true, isFinalBoss:true,
-        breathe:0, breatheDir:1, breatheSpeed:.008, hitTimer:0, bubbletimer:999,
-        ataqueCd:80, ataqueCdMax:80, raioCooldown:80
-      }];
-      if (onda === 15) return [{
-        id:997, x:Math.random()*(WORLD_WIDTH-300)+150, y:Math.random()*(WORLD_HEIGHT-300)+150,
-        hp:9500, maxHp:9500, size:260, cor:'#1a0030', corVariante:'#0d0020', corBrilho:'#9900ff', corOlho:'#dd88ff',
-        tipo:'normal', isBoss:true, breathe:0, breatheDir:1, breatheSpeed:.014, hitTimer:0, bubbletimer:999, ataqueCd:90, ataqueCdMax:90
-      }];
-      if (onda === 10) return [{
-        id:998, x:Math.random()*(WORLD_WIDTH-300)+150, y:Math.random()*(WORLD_HEIGHT-300)+150,
-        hp:5500, maxHp:5500, size:230, cor:'#200000', corVariante:'#0f0000', corBrilho:'#ff3300', corOlho:'#ff9988',
-        tipo:'normal', isBoss:true, breathe:0, breatheDir:1, breatheSpeed:.016, hitTimer:0, bubbletimer:999, ataqueCd:90, ataqueCdMax:90
-      }];
+
+      // ── ONDA 10: Boss Rimuru — cutscene primeiro, monstros vazio até ela acabar ──
+      if (onda === TOTAL_ONDAS) {
+        rimuruCutsceneAtiva = true;
+        rimuruCutsceneTimer = 0;
+        return []; // Rimuru é adicionado após a cutscene
+      }
+
+      // ── Bosses intermediários ──
       if (onda === 5) return [{
         id:999, x:Math.random()*(WORLD_WIDTH-300)+150, y:Math.random()*(WORLD_HEIGHT-300)+150,
-        hp:2200, maxHp:2200, size:210, cor:'#7f1d1d', corVariante:'#1c0404', corBrilho:'#ef4444', corOlho:'#fecaca',
-        tipo:'normal', isBoss:true, breathe:0, breatheDir:1, breatheSpeed:.018, hitTimer:0, bubbletimer:999, ataqueCd:90, ataqueCdMax:90
+        hp:2800, maxHp:2800, size:210, cor:'#7f1d1d', corVariante:'#1c0404', corBrilho:'#ef4444', corOlho:'#fecaca',
+        tipo:'normal', isBoss:true, isFinalBoss:false,
+        breathe:0, breatheDir:1, breatheSpeed:.018, hitTimer:0, bubbletimer:999, ataqueCd:90, ataqueCdMax:90
       }];
-      const qt = onda <= 10 ? 4 + onda * 4 : 44 + (onda - 10) * 7;
+
+      // ── Ondas normais (1-4, 6-9) ──
+      const qt = 4 + onda * 4;
       const lista: Monstro[] = [];
       for (let i = 0; i < qt; i++) {
         let tipo: TipoInimigo = 'normal';
@@ -349,11 +317,7 @@ useEffect(() => {
     const socket = socketRef.current;
     if (socket) {
       socket.on('monstros_atualizados', (data: { monstros: Monstro[]; ondaAtual: number; raioBossArr: RaioBoss[] }) => {
-        if (!souHostRef.current) {
-          monstros = data.monstros;
-          ondaAtual = data.ondaAtual;
-          raioBossArr = data.raioBossArr || [];
-        }
+        if (!souHostRef.current) { monstros = data.monstros; ondaAtual = data.ondaAtual; raioBossArr = data.raioBossArr || []; }
       });
       socket.on('aplicar_dano', (data: { monstroId: number; dano: number }) => {
         if (!souHostRef.current) return;
@@ -361,11 +325,7 @@ useEffect(() => {
         if (m) { m.hp -= data.dano; m.hitTimer = 6; }
       });
       socket.on('onda_mudou', (data: { ondaAtual: number }) => {
-        if (!souHostRef.current) {
-          ondaAtual = data.ondaAtual;
-          raioBossArr = [];
-          projetilInimigos = [];
-        }
+        if (!souHostRef.current) { ondaAtual = data.ondaAtual; raioBossArr = []; projetilInimigos = []; }
       });
     }
 
@@ -409,13 +369,35 @@ useEffect(() => {
       if(sombrasFila.length<MAX_SOMBRAS) sombrasFila.push({ tipo:m.tipo, size:m.size, maxHp:m.maxHp, ordemMorte:contadorMorte });
     }
 
-    // ── Causa dano: host aplica direto, cliente envia para host ──
     function causarDano(m: Monstro, dano: number) {
       if (souHostRef.current) {
         m.hp -= dano;
         m.hitTimer = 8;
       } else {
         socketRef.current?.emit('dano_monstro', { monstroId: m.id, dano });
+      }
+    }
+
+    // ── causarDanoRimuru: aplica fator especial se for o Rimuru e verifica transição de fase ──
+    function causarDanoRimuru(m: Monstro, dano: number, isUlt: boolean = false) {
+      const danofinal = isUlt ? dano * ULT_DANO_RIMURU_FATOR : dano;
+
+      if (souHostRef.current) {
+        m.hp -= danofinal;
+        m.hitTimer = 8;
+
+        // ── Transição para fase 2 ──
+        if (m.rimuruFase === 1 && m.hp <= 0) {
+          m.hp = RIMURU_HP_FASE2;
+          m.maxHp = RIMURU_HP_FASE2;
+          m.rimuruFase = 2;
+          // Fase 2: mais agressivo
+          m.ataqueCdMax = 40;
+          m.ataqueCd = 40;
+          if (m.raioCooldown !== undefined) m.raioCooldown = 50;
+        }
+      } else {
+        socketRef.current?.emit('dano_monstro', { monstroId: m.id, dano: danofinal });
       }
     }
 
@@ -430,6 +412,28 @@ useEffect(() => {
         ctx.fillStyle='white'; ctx.font='16px sans-serif';
         ctx.fillText('Recarregue (F5) para jogar novamente',canvas.width/2,canvas.height/2+45);
         animId=requestAnimationFrame(render); return;
+      }
+
+      // ── Cutscene do Rimuru ──
+      if (rimuruCutsceneAtiva) {
+        rimuruCutsceneTimer++;
+
+        // Renderiza cenário + cutscene por cima
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+        desenharCenarioEpico(ctx, WORLD_WIDTH, WORLD_HEIGHT, tick);
+        ctx.restore();
+
+        desenharRimuruCutscene(ctx, rimuruCutsceneTimer, tick, canvas.width, canvas.height, imgRimuru);
+
+        if (rimuruCutsceneTimer >= RIMURU_CUTSCENE_DUR) {
+          rimuruCutsceneAtiva = false;
+          // Adiciona o Rimuru ao campo após a cutscene
+          monstros = [criarRimuru()];
+        }
+
+        animId = requestAnimationFrame(render);
+        return;
       }
 
       if(ryoikiLimpouOnda){
@@ -461,7 +465,6 @@ useEffect(() => {
         socketRef.current?.emit('sync_hp',{hp:playerHp,hpMax:status.hpMax});
       }
 
-      // ── Host sincroniza monstros a cada ~100ms (6 frames) ──
       if(souHostRef.current){
         if(++syncMonstrosTick>=6){
           syncMonstrosTick=0;
@@ -525,7 +528,19 @@ useEffect(() => {
         }
         if(ryoikiMagoAtivo){
           ryoikiMagoTimer++;
-          if(ryoikiMagoTimer>=RYOIKI_M_KILL_T&&!ryoikiMagoKilled){monstros.length=0;ryoikiMagoKilled=true;}
+          // Na onda do Rimuru, a ult do mago NÃO mata instantaneamente
+          if(ryoikiMagoTimer>=RYOIKI_M_KILL_T&&!ryoikiMagoKilled){
+            if (ondaAtual === TOTAL_ONDAS) {
+              // Aplica dano pesado mas não mata o Rimuru
+              monstros.forEach(m => {
+                if (m.isRimuru) causarDanoRimuru(m, m.maxHp * 0.35, true);
+                else m.hp = 0;
+              });
+            } else {
+              monstros.length=0;
+            }
+            ryoikiMagoKilled=true;
+          }
           if(ryoikiMagoTimer>=RYOIKI_M_DUR){ryoikiMagoAtivo=false;ryoikiMagoCooldown=RYOIKI_M_CD_MAX;floatingInfos=[];pararAudio();}
         }
         if(ryoikiMagoCooldown>0) ryoikiMagoCooldown--;
@@ -536,7 +551,11 @@ useEffect(() => {
         if(teclas['z']&&furacaoCooldown<=0&&!furacaoAtivo){furacaoAtivo=true;furacaoTimer=0;furacaoCooldown=FUR_CD_MAX;}
         if(furacaoAtivo){
           furacaoTimer++; furacaoAngulo+=.18;
-          monstros.forEach(m=>{const ddx=(m.x+m.size/2)-(player.x+40),ddy=(m.y+m.size/2)-(player.y+40);if(Math.hypot(ddx,ddy)<FUR_ALCANCE+m.size/2){causarDano(m,FUR_DANO_TICK);const d=Math.max(1,Math.hypot(ddx,ddy));m.x+=(ddx/d)*2.5;m.y+=(ddy/d)*2.5;}});
+          monstros.forEach(m=>{const ddx=(m.x+m.size/2)-(player.x+40),ddy=(m.y+m.size/2)-(player.y+40);if(Math.hypot(ddx,ddy)<FUR_ALCANCE+m.size/2){
+            if(m.isRimuru) causarDanoRimuru(m,FUR_DANO_TICK,false);
+            else causarDano(m,FUR_DANO_TICK);
+            const d=Math.max(1,Math.hypot(ddx,ddy));m.x+=(ddx/d)*2.5;m.y+=(ddy/d)*2.5;
+          }});
           if(furacaoTimer>=FUR_DUR) furacaoAtivo=false;
         }
         if(furacaoCooldown>0) furacaoCooldown--;
@@ -546,9 +565,20 @@ useEffect(() => {
         }
         if(ryoikiAtivo){
           ryoikiTimer++;
-          monstros.forEach(m=>{causarDano(m,(m.hp+m.maxHp)/RYO_DUR+5);});
-          for(let i=monstros.length-1;i>=0;i--){if(monstros[i].hp<=0)monstros.splice(i,1);}
-          if(ryoikiTimer>=RYO_DUR){monstros.length=0;ryoikiAtivo=false;slashesDomain=[];ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
+          // Na onda do Rimuru: dano total * fator de ult
+          monstros.forEach(m=>{
+            const danoPorFrame = (m.hp+m.maxHp)/RYO_DUR+5;
+            if(m.isRimuru) causarDanoRimuru(m, danoPorFrame, true);
+            else causarDano(m, danoPorFrame);
+          });
+          for(let i=monstros.length-1;i>=0;i--){if(monstros[i].hp<=0&&!monstros[i].isRimuru)monstros.splice(i,1);}
+          if(ryoikiTimer>=RYO_DUR){
+            // Remove tudo exceto Rimuru (que deve ter sobrevivido parcialmente)
+            monstros=monstros.filter(m=>m.isRimuru && m.hp>0);
+            ryoikiAtivo=false;slashesDomain=[];
+            if(monstros.length===0) {ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+            pararAudio();
+          }
         }
         if(ryoikiCooldown>0) ryoikiCooldown--;
       }
@@ -584,8 +614,25 @@ useEffect(() => {
         }
         if(invocAtivo){
           invocTimer++;
-          if(invocTimer>=INVOC_KILL_T&&!invocKilled){monstros.forEach(m=>{explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40});});monstros.length=0;invocKilled=true;}
-          if(invocTimer>=INVOC_DUR){invocAtivo=false;invocParticulas=[];invocCooldown=INVOC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
+          if(invocTimer>=INVOC_KILL_T&&!invocKilled){
+            if (ondaAtual === TOTAL_ONDAS) {
+              monstros.forEach(m => {
+                if (m.isRimuru) causarDanoRimuru(m, m.maxHp * 0.4, true);
+                else { explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40}); m.hp=0; }
+              });
+            } else {
+              monstros.forEach(m=>{explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:40});});
+              monstros.length=0;
+            }
+            invocKilled=true;
+          }
+          if(invocAtivo && invocTimer>=INVOC_DUR){
+            invocAtivo=false;invocParticulas=[];invocCooldown=INVOC_CD_MAX;
+            // Remove mortos não-Rimuru
+            monstros=monstros.filter(m=>m.isRimuru&&m.hp>0);
+            if(monstros.length===0){ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+            pararAudio();
+          }
         }
         if(invocCooldown>0) invocCooldown--;
         aliados=aliados.filter(a=>{
@@ -598,7 +645,12 @@ useEffect(() => {
             a.anguloAtaque=Math.atan2(ady,adx);
             const moveRange=(a.tipo==='arqueiro'||a.tipo==='mago_ini')?ALIADO_PROJ_RANGE*.8:ALIADO_ALCANCE;
             if(ad>moveRange){const spd=a.tipo==='velocista'?3.2:1.8;a.x+=(adx/ad)*spd;a.y+=(ady/ad)*spd;}
-            if((a.tipo==='tanque'||a.tipo==='normal'||a.tipo==='velocista')&&ad<ALIADO_ALCANCE+alv.size/2&&a.cooldownAtaque<=0){causarDano(alv,ALIADO_DANO*(a.tipo==='tanque'?1.5:a.tipo==='velocista'?.7:1));a.cooldownAtaque=ALIADO_CD*(a.tipo==='velocista'?.5:1);}
+            const danoBruto=ALIADO_DANO*(a.tipo==='tanque'?1.5:a.tipo==='velocista'?.7:1);
+            if((a.tipo==='tanque'||a.tipo==='normal'||a.tipo==='velocista')&&ad<ALIADO_ALCANCE+alv.size/2&&a.cooldownAtaque<=0){
+              if(alv.isRimuru) causarDanoRimuru(alv,danoBruto,false);
+              else causarDano(alv,danoBruto);
+              a.cooldownAtaque=ALIADO_CD*(a.tipo==='velocista'?.5:1);
+            }
             if((a.tipo==='arqueiro'||a.tipo==='mago_ini')&&a.cooldownAtaque<=0&&ad<ALIADO_PROJ_RANGE){
               const spd2=a.tipo==='mago_ini'?7:12;
               projetiisAliados.push({x:a.x+a.size/2,y:a.y+a.size/2,vx:Math.cos(a.anguloAtaque)*spd2,vy:Math.sin(a.anguloAtaque)*spd2,vida:60,dano:ALIADO_PROJ_DANO,cor:a.tipo==='mago_ini'?'#4c1d95':'#14532d',corBrilho:a.tipo==='mago_ini'?'#e879f9':'#4ade80',homingTimer:0});
@@ -624,7 +676,10 @@ useEffect(() => {
         if(teclas['z']&&ebonyCooldown<=0&&!ebonyAtivo){ebonyAtivo=true;ebonyTimer=0;ebonyCooldown=EBONY_CD_MAX;}
         if(ebonyAtivo){
           ebonyTimer++;
-          monstros.forEach(m=>{const d=Math.hypot((m.x+m.size/2)-(player.x+40),(m.y+m.size/2)-(player.y+40));if(d<EBONY_AREA+m.size/2){causarDano(m,1.2);}});
+          monstros.forEach(m=>{const d=Math.hypot((m.x+m.size/2)-(player.x+40),(m.y+m.size/2)-(player.y+40));if(d<EBONY_AREA+m.size/2){
+            if(m.isRimuru) causarDanoRimuru(m,1.2,false);
+            else causarDano(m,1.2);
+          }});
           if(ebonyTimer>=EBONY_DUR) ebonyAtivo=false;
         }
         if(ebonyCooldown>0) ebonyCooldown--;
@@ -635,8 +690,23 @@ useEffect(() => {
         }
         if(atomicAtivo){
           atomicTimer++;
-          if(atomicTimer===80){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;}
-          if(atomicTimer>=ATOMIC_DUR){atomicAtivo=false;atomicCooldown=ATOMIC_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
+          if(atomicTimer===80){
+            if (ondaAtual === TOTAL_ONDAS) {
+              monstros.forEach(m => {
+                if(m.isRimuru) causarDanoRimuru(m, m.maxHp * 0.45, true);
+                else { explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}); m.hp=0; }
+              });
+            } else {
+              monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));
+              monstros.length=0;
+            }
+          }
+          if(atomicTimer>=ATOMIC_DUR){
+            atomicAtivo=false;atomicCooldown=ATOMIC_CD_MAX;
+            monstros=monstros.filter(m=>m.isRimuru&&m.hp>0);
+            if(monstros.length===0){ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+            pararAudio();
+          }
         }
         if(atomicCooldown>0) atomicCooldown--;
       }
@@ -653,7 +723,11 @@ useEffect(() => {
         if(teclas['z']&&kyokaCooldown<=0&&!kyokaAtivo){kyokaAtivo=true;kyokaTimer=0;kyokaCooldown=KYOKA_CD_MAX;tocarUltimate('aizen');}
         if(kyokaAtivo){
           kyokaTimer++;
-          if(kyokaTimer%20===0){monstros.forEach(m=>{const ri=Math.floor(Math.random()*monstros.length);if(monstros[ri]&&monstros[ri]!==m){causarDano(monstros[ri],15+status.int);}});}
+          if(kyokaTimer%20===0){monstros.forEach(m=>{const ri=Math.floor(Math.random()*monstros.length);if(monstros[ri]&&monstros[ri]!==m){
+            const dano=15+status.int;
+            if(monstros[ri].isRimuru) causarDanoRimuru(monstros[ri],dano*ULT_DANO_RIMURU_FATOR,true);
+            else causarDano(monstros[ri],dano);
+          }});}
           if(kyokaTimer>=KYOKA_DUR){kyokaAtivo=false;pararAudio();}
         }
         if(kyokaCooldown>0) kyokaCooldown--;
@@ -665,14 +739,30 @@ useEffect(() => {
         }
         if(hogyokuAtivo){
           hogyokuTimer++;
-          if(hogyokuTimer===Math.floor(HOGYOKU_DUR*.45)&&!hogyokuKilled){monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));monstros.length=0;hogyokuKilled=true;}
-          if(hogyokuTimer>=HOGYOKU_DUR){hogyokuAtivo=false;hogyokuCooldown=HOGYOKU_CD_MAX;ryoikiLimpouOnda=true;ryoikiDelayTimer=0;pararAudio();}
+          if(hogyokuTimer===Math.floor(HOGYOKU_DUR*.45)&&!hogyokuKilled){
+            if (ondaAtual === TOTAL_ONDAS) {
+              monstros.forEach(m=>{
+                if(m.isRimuru) causarDanoRimuru(m, m.maxHp * 0.4, true);
+                else { explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}); m.hp=0; }
+              });
+            } else {
+              monstros.forEach(m=>explosoesArea.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:50}));
+              monstros.length=0;
+            }
+            hogyokuKilled=true;
+          }
+          if(hogyokuTimer>=HOGYOKU_DUR){
+            hogyokuAtivo=false;hogyokuCooldown=HOGYOKU_CD_MAX;
+            monstros=monstros.filter(m=>m.isRimuru&&m.hp>0);
+            if(monstros.length===0){ryoikiLimpouOnda=true;ryoikiDelayTimer=0;}
+            pararAudio();
+          }
         }
         if(hogyokuCooldown>0) hogyokuCooldown--;
       }
 
       // ── Avançar onda ──
-      if(monstros.length===0&&!ryoikiAtivo&&!ryoikiLimpouOnda&&!invocAtivo&&!atomicAtivo&&!hogyokuAtivo){
+      if(monstros.length===0&&!ryoikiAtivo&&!ryoikiLimpouOnda&&!invocAtivo&&!atomicAtivo&&!hogyokuAtivo&&!rimuruCutsceneAtiva){
         if(ondaAtual<TOTAL_ONDAS){
           ondaAtual++;monstros=gerarOnda(ondaAtual);raioBossArr.length=0;projetilInimigos=[];
           if(souHostRef.current) socketRef.current?.emit('nova_onda',{ondaAtual});
@@ -709,14 +799,79 @@ useEffect(() => {
         m.breathe+=m.breatheSpeed;
         const pd=Math.hypot(pcx-m.x-m.size/2,pcy-m.y-m.size/2);
         const velScale=1+ondaAtual*0.04;
-        let velBase=m.isFinalBoss?.003:m.isBoss?.005:m.tipo==='tanque'?.006:m.tipo==='velocista'?.022:m.tipo==='arqueiro'?.007:.01;
+
+        // ── Rimuru: IA especial por fase ──
+        if (m.isRimuru) {
+          const fase = m.rimuruFase ?? 1;
+          // Velocidade aumenta na fase 2
+          const rimuruVel = (fase === 2 ? 0.008 : 0.005) * velScale;
+          if(pd>80&&pd<1800){m.x+=(pcx-m.x-m.size/2)*rimuruVel;m.y+=(pcy-m.y-m.size/2)*rimuruVel;}
+
+          // Tiro de projéteis
+          if(m.ataqueCd>0) m.ataqueCd--;
+          if(m.ataqueCd<=0){
+            m.ataqueCd=m.ataqueCdMax;
+            const numTiros = fase === 2 ? 8 : 5;
+            for(let bi=0;bi<numTiros;bi++){
+              const ang=Math.atan2(pcy-m.y-m.size/2,pcx-m.x-m.size/2)+(bi/numTiros)*Math.PI*2*(fase===2?0.6:0.45);
+              projetilInimigos.push({x:m.x+m.size/2,y:m.y+m.size/2,vx:Math.cos(ang)*(fase===2?9:7),vy:Math.sin(ang)*(fase===2?9:7),vida:120,dano:fase===2?40:28,cor:'#4c1d95',corBrilho:'#a855f7',homingTimer:0});
+            }
+          }
+
+          // Megiddo (raio especial fase 2)
+          if (fase === 2) {
+            if(m.megiddoCd !== undefined) m.megiddoCd--;
+            if((m.megiddoCd ?? 0) <= 0){
+              m.megiddoCd = 200;
+              // Salva de Megiddo: chuva de raios ao redor do jogador
+              for(let r2=0;r2<6;r2++){
+                const ang=Math.atan2(pcy-m.y-m.size/2,pcx-m.x-m.size/2)+(r2/6)*Math.PI*2*.4;
+                raioBossArr.push({x:m.x+m.size/2,y:m.y+m.size/2,vx:Math.cos(ang)*RAIO_BOSS_VEL*1.3,vy:Math.sin(ang)*RAIO_BOSS_VEL*1.3,angulo:ang,vida:RAIO_BOSS_VIDA,homingTimer:0});
+              }
+            }
+          }
+
+          // Contato direto
+          if(pd<m.size*0.6){
+            if(!estaInvulneravel){
+              playerHp-=(fase===2?3.5:2.2);
+              if(playerHp<=0) estadoJogo='gameover';
+            }
+          }
+
+          // Transição de fase se chegou a 0 com fase 1 ainda no objeto
+          // (pode ter sido causado por dano direto fora do causarDanoRimuru)
+          if(m.rimuruFase===1 && m.hp<=0){
+            m.hp=RIMURU_HP_FASE2; m.maxHp=RIMURU_HP_FASE2; m.rimuruFase=2;
+            m.ataqueCdMax=40; m.ataqueCd=40;
+            if(m.raioCooldown!==undefined) m.raioCooldown=50;
+          }
+
+          desenharRimuruBoss(ctx, m, tick, canvas.width, canvas.height, imgRimuru);
+          // ── PNG do Rimuru desenhado direto (igual ao player) ──
+          if (imgRimuru) {
+            ctx.save();
+            ctx.shadowColor = (m.rimuruFase ?? 1) === 2 ? '#fbbf24' : '#9333ea';
+            ctx.shadowBlur = 35;
+            ctx.drawImage(imgRimuru, m.x, m.y, m.size, m.size);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+          }
+
+          // Rimuru fase 2 morreu de verdade
+          if(m.rimuruFase===2 && m.hp<=0) monstrosParaRemover.push(idx);
+          return;
+        }
+
+        // ── Monstros normais ──
+        let velBase=m.isBoss?.005:m.tipo==='tanque'?.006:m.tipo==='velocista'?.022:m.tipo==='arqueiro'?.007:.01;
         velBase*=velScale;
         const minDist=(m.tipo==='arqueiro'||m.tipo==='mago_ini')&&!m.isBoss?280:0;
         if(pd>minDist&&pd<1400){m.x+=(pcx-m.x-m.size/2)*velBase;m.y+=(pcy-m.y-m.size/2)*velBase;}
         else if(pd<minDist&&!m.isBoss){m.x-=(pcx-m.x-m.size/2)*velBase*1.5;m.y-=(pcy-m.y-m.size/2)*velBase*1.5;}
-        if(pd<(m.isFinalBoss?140:m.isBoss?100:m.tipo==='tanque'?55:40)){
+        if(pd<(m.isBoss?100:m.tipo==='tanque'?55:40)){
           if(!estaInvulneravel){
-            playerHp-=(m.isFinalBoss?2.5+ondaAtual*0.3:m.isBoss?1.5+ondaAtual*0.25:0.4+ondaAtual*0.18);
+            playerHp-=(m.isBoss?1.5+ondaAtual*0.25:0.4+ondaAtual*0.18);
             if(playerHp<=0) estadoJogo='gameover';
           }
         }
@@ -727,17 +882,9 @@ useEffect(() => {
           if(m.tipo==='mago_ini'&&pd<500){for(let bi=-1;bi<=1;bi++){const ang=Math.atan2(pcy-m.y-m.size/2,pcx-m.x-m.size/2)+bi*.25;projetilInimigos.push({x:m.x+m.size/2,y:m.y+m.size/2,vx:Math.cos(ang)*7,vy:Math.sin(ang)*7,vida:80,dano:18,cor:PALETA_MAGO_INI.base,corBrilho:PALETA_MAGO_INI.brilho,homingTimer:0});}}
           if(m.isBoss&&!m.isFinalBoss){for(let bi=0;bi<6;bi++){const ang=Math.atan2(pcy-m.y-m.size/2,pcx-m.x-m.size/2)+(bi/6)*Math.PI*2*.5;projetilInimigos.push({x:m.x+m.size/2,y:m.y+m.size/2,vx:Math.cos(ang)*8,vy:Math.sin(ang)*8,vida:120,dano:25,cor:'#7f1d1d',corBrilho:'#ef4444',homingTimer:0});}}
         }
-        if(m.isFinalBoss){
-          if(m.raioCooldown===undefined) m.raioCooldown=RAIO_BOSS_CD;
-          m.raioCooldown!--;
-          if(m.raioCooldown!<=0){
-            const numRaios=ondaAtual>=20?5:3; m.raioCooldown=RAIO_BOSS_CD;
-            for(let r2=0;r2<numRaios;r2++){const sp=(r2-Math.floor(numRaios/2))*.35;const ang=Math.atan2(pcy-(m.y+m.size/2),pcx-(m.x+m.size/2))+sp;raioBossArr.push({x:m.x+m.size/2,y:m.y+m.size/2,vx:Math.cos(ang)*RAIO_BOSS_VEL,vy:Math.sin(ang)*RAIO_BOSS_VEL,angulo:ang,vida:RAIO_BOSS_VIDA,homingTimer:0});}
-          }
-          desenharFinalBoss(ctx,m,tick);
-        } else {
-          desenharSlime(ctx,m,tick);
-        }
+
+        desenharSlime(ctx,m,tick);
+
         if(melee.ativo){const d=Math.hypot(pcx-(m.x+m.size/2),pcy-(m.y+m.size/2));if(d<(m.isBoss?150:100)){causarDano(m,melee.dano/10);if(!m.isBoss){m.x+=Math.cos(player.direcaoRad)*10;m.y+=Math.sin(player.direcaoRad)*10;}}}
         if(cl==='sombrio'&&corte.ativo){const cdx=(m.x+m.size/2)-pcx,cdy=(m.y+m.size/2)-pcy,cd=Math.hypot(cdx,cdy);if(cd<CORTE_ALC+m.size/2){let diff=Math.atan2(cdy,cdx)-corte.anguloBase;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;if(Math.abs(diff)<CORTE_LARG/2){causarDano(m,CORTE_DANO*(1/corte.duracao));}}}
         if(m.hp<=0){registrarMorte(m);monstrosParaRemover.push(idx);}
@@ -751,7 +898,7 @@ useEffect(() => {
         if(Math.hypot(rb.x-pcx,rb.y-pcy)<28){if(!estaInvulneravel){playerHp-=RAIO_BOSS_DANO;if(playerHp<=0)estadoJogo='gameover';}return false;}
         if(rb.vida<=0||rb.x<0||rb.x>WORLD_WIDTH||rb.y<0||rb.y>WORLD_HEIGHT)return false;
         const al=Math.min(1,rb.vida/20);
-        ctx.save();ctx.globalAlpha=al;ctx.strokeStyle='rgba(255,0,144,.3)';ctx.lineWidth=14;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(rb.x-rb.vx*4,rb.y-rb.vy*4);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.strokeStyle='#ff6fff';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(rb.x-rb.vx*3,rb.y-rb.vy*3);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.fillStyle='#ff6fff';ctx.beginPath();ctx.arc(rb.x,rb.y,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();return true;
+        ctx.save();ctx.globalAlpha=al;ctx.strokeStyle='rgba(168,85,247,.3)';ctx.lineWidth=14;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(rb.x-rb.vx*4,rb.y-rb.vy*4);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.strokeStyle='#c084fc';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(rb.x-rb.vx*3,rb.y-rb.vy*3);ctx.lineTo(rb.x,rb.y);ctx.stroke();ctx.fillStyle='#e879f9';ctx.beginPath();ctx.arc(rb.x,rb.y,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.restore();return true;
       });
 
       projetilInimigos=projetilInimigos.filter(p=>{
@@ -767,7 +914,11 @@ useEffect(() => {
         if(p.vida<=0||p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT)return false;
         desenharProjetilInimigo(ctx,p);
         let hit=false;
-        for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+10){causarDano(m,p.dano);hit=true;break;}}
+        for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+10){
+          if(m.isRimuru) causarDanoRimuru(m,p.dano,false);
+          else causarDano(m,p.dano);
+          hit=true;break;
+        }}
         return !hit;
       });
 
@@ -776,26 +927,38 @@ useEffect(() => {
         if(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT){projectiles.splice(i,1);continue;}
         if(p.tipo==='guerreiro'){
           desenharProjetilGuerreiro(ctx,p);
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+16){causarDano(m,p.dano);explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});projectiles.splice(i,1);break;}}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+16){
+            if(m.isRimuru) causarDanoRimuru(m,p.dano,false);
+            else causarDano(m,p.dano);
+            explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});projectiles.splice(i,1);break;
+          }}
           continue;
         }
         if(p.tipo==='sombrio'){
           if(p.dp===undefined)p.dp=0;p.dp+=Math.hypot(p.vx,p.vy);
           desenharProjetilSombrio(ctx,p);
           let explodiu=false;
-          for(const m of monstros){if(explodiu)break;const d=Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2));if(d<m.size/2+16){explodiu=true;monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){causarDano(alv,p.dano*(1-(da/SOMB_AREA)*.5));}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}}
-          if(!explodiu&&(p.dp??0)>=SOMB_AREA*4){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){causarDano(alv,p.dano*(1-(da/SOMB_AREA)*.5)*.6);}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}
+          for(const m of monstros){if(explodiu)break;const d=Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2));if(d<m.size/2+16){explodiu=true;monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){const dano=p.dano*(1-(da/SOMB_AREA)*.5);if(alv.isRimuru)causarDanoRimuru(alv,dano,false);else causarDano(alv,dano);}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}}
+          if(!explodiu&&(p.dp??0)>=SOMB_AREA*4){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<SOMB_AREA+alv.size/2){const dano=p.dano*(1-(da/SOMB_AREA)*.5)*.6;if(alv.isRimuru)causarDanoRimuru(alv,dano,false);else causarDano(alv,dano);}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:40});projectiles.splice(i,1);}
         } else if(p.tipo==='shadow_slash'){
           ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angulo);
           for(let t=1;t<=6;t++){ctx.globalAlpha=.4*(1-t/6);const sg=ctx.createRadialGradient(-t*9,0,0,-t*9,0,8);sg.addColorStop(0,'#d946ef');sg.addColorStop(1,'rgba(168,85,247,0)');ctx.fillStyle=sg;ctx.beginPath();ctx.arc(-t*9,0,8,0,Math.PI*2);ctx.fill();}
           ctx.globalAlpha=1;const sg2=ctx.createRadialGradient(0,0,0,0,0,14);sg2.addColorStop(0,'#fff');sg2.addColorStop(.3,'#e879f9');sg2.addColorStop(.7,'#d946ef');sg2.addColorStop(1,'rgba(168,85,247,0)');ctx.shadowColor='#d946ef';ctx.shadowBlur=22;ctx.fillStyle=sg2;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.restore();
           let hitS=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+14){causarDano(m,p.dano);explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});hitS=true;break;}}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+14){
+            if(m.isRimuru)causarDanoRimuru(m,p.dano,false);else causarDano(m,p.dano);
+            explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:30});hitS=true;break;
+          }}
           if(hitS)projectiles.splice(i,1);
         } else if(p.tipo==='ilusao'){
           desenharProjetilIlusao(ctx,p as any);
           let hitI=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){causarDano(m,p.dano);ilusaoParticulas.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:ILUSAO_DUR});if(kyokaAtivo){monstros.forEach(alv=>{if(alv!==m&&Math.hypot((alv.x+alv.size/2)-(m.x+m.size/2),(alv.y+alv.size/2)-(m.y+m.size/2))<120){causarDano(alv,p.dano*.5);}});}hitI=true;break;}}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){
+            if(m.isRimuru)causarDanoRimuru(m,p.dano,false);else causarDano(m,p.dano);
+            ilusaoParticulas.push({x:m.x+m.size/2,y:m.y+m.size/2,timer:0,maxTimer:ILUSAO_DUR});
+            if(kyokaAtivo){monstros.forEach(alv=>{if(alv!==m&&Math.hypot((alv.x+alv.size/2)-(m.x+m.size/2),(alv.y+alv.size/2)-(m.y+m.size/2))<120){if(alv.isRimuru)causarDanoRimuru(alv,p.dano*.5,false);else causarDano(alv,p.dano*.5);}});}
+            hitI=true;break;
+          }}
           if(hitI)projectiles.splice(i,1);
         } else if((p as any).tipo==='hollow_purple'){
           ctx.save();
@@ -803,18 +966,25 @@ useEffect(() => {
           ctx.globalAlpha=1;const gp=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,30);gp.addColorStop(0,'#ffffff');gp.addColorStop(.15,'#f0abfc');gp.addColorStop(.5,'#a855f7');gp.addColorStop(.8,'#7c3aed');gp.addColorStop(1,'rgba(109,40,217,0)');ctx.shadowColor='#e879f9';ctx.shadowBlur=50;ctx.fillStyle=gp;ctx.beginPath();ctx.arc(p.x,p.y,30,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
           for(let sp=0;sp<6;sp++){const sa=tick*0.25+sp*(Math.PI*2/6);const sx2=p.x+Math.cos(sa)*42,sy2=p.y+Math.sin(sa)*42;const sg=ctx.createRadialGradient(sx2,sy2,0,sx2,sy2,5);sg.addColorStop(0,'rgba(255,255,255,0.9)');sg.addColorStop(1,'rgba(168,85,247,0)');ctx.fillStyle=sg;ctx.beginPath();ctx.arc(sx2,sy2,5,0,Math.PI*2);ctx.fill();}
           ctx.restore();
-          for(let mi=monstros.length-1;mi>=0;mi--){const m=monstros[mi];if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+30){monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<200+alv.size/2){causarDano(alv,HOLLOW_DANO*(1-da/200*.5));}});explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:60});projectiles.splice(i,1);break;}}
+          for(let mi=monstros.length-1;mi>=0;mi--){const m=monstros[mi];if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+30){
+            monstros.forEach(alv=>{const da=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(da<200+alv.size/2){const dano=HOLLOW_DANO*(1-da/200*.5);if(alv.isRimuru)causarDanoRimuru(alv,dano*ULT_DANO_RIMURU_FATOR,true);else causarDano(alv,dano);}});
+            explosoesArea.push({x:p.x,y:p.y,timer:0,maxTimer:60});projectiles.splice(i,1);break;
+          }}
         } else if(p.tipo==='mago'){
           ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angulo);if(imgArmaMago)ctx.drawImage(imgArmaMago,-20,-20,40,40);ctx.restore();
-          let hit=false;for(const m of monstros){if(p.x>m.x&&p.x<m.x+m.size&&p.y>m.y&&p.y<m.y+m.size){causarDano(m,p.dano/5);hit=true;break;}}
+          let hit=false;for(const m of monstros){if(p.x>m.x&&p.x<m.x+m.size&&p.y>m.y&&p.y<m.y+m.size){if(m.isRimuru)causarDanoRimuru(m,p.dano/5,false);else causarDano(m,p.dano/5);hit=true;break;}}
           if(hit)projectiles.splice(i,1);
         } else if(p.tipo==='red'){
           ctx.save();
           const rp=10+Math.sin(tick*0.4)*2;
           for(let t=1;t<=8;t++){const tx=p.x-p.vx*t*0.5,ty=p.y-p.vy*t*0.5;ctx.globalAlpha=0.4*(1-t/8);const tg=ctx.createRadialGradient(tx,ty,0,tx,ty,rp*(1-t/10));tg.addColorStop(0,'rgba(255,80,0,1)');tg.addColorStop(1,'rgba(200,0,0,0)');ctx.fillStyle=tg;ctx.beginPath();ctx.arc(tx,ty,rp*(1-t/10),0,Math.PI*2);ctx.fill();}
-          ctx.globalAlpha=1;ctx.shadowColor='#ff2200';ctx.shadowBlur=30;const rg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,rp);rg.addColorStop(0,'#ffffff');rg.addColorStop(0.2,'#ffaa00');rg.addColorStop(0.6,'#ff2200');rg.addColorStop(1,'rgba(180,0,0,0)');ctx.fillStyle=rg;ctx.beginPath();ctx.arc(p.x,p.y,rp,0,Math.PI*2);ctx.fill();ctx.globalAlpha=0.5+Math.sin(tick*0.5)*0.2;ctx.strokeStyle='#ff4400';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,rp+4+Math.sin(tick*0.4)*2,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+          ctx.globalAlpha=1;ctx.shadowColor='#ff2200';ctx.shadowBlur=30;const rg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,rp);rg.addColorStop(0,'#ffffff');rg.addColorStop(0.2,'#ffaa00');rg.addColorStop(0.6,'#ff2200');rg.addColorStop(1,'rgba(180,0,0,0)');ctx.fillStyle=rg;ctx.beginPath();ctx.arc(p.x,p.y,rp,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.restore();
           let hitRed=false;
-          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){causarDano(m,p.dano);monstros.forEach(alv=>{const dd=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(dd<RED_RAIO_EXPLO+alv.size/2){const ka=Math.atan2((alv.y+alv.size/2)-p.y,(alv.x+alv.size/2)-p.x);const force=(1-dd/RED_RAIO_EXPLO)*18;alv.x+=Math.cos(ka)*force;alv.y+=Math.sin(ka)*force;if(alv!==m)causarDano(alv,p.dano*0.3);}});redExplosoes.push({x:p.x,y:p.y,timer:0,maxTimer:25});projectiles.splice(i,1);hitRed=true;break;}}
+          for(const m of monstros){if(Math.hypot(p.x-(m.x+m.size/2),p.y-(m.y+m.size/2))<m.size/2+12){
+            if(m.isRimuru)causarDanoRimuru(m,p.dano,false);else causarDano(m,p.dano);
+            monstros.forEach(alv=>{const dd=Math.hypot((alv.x+alv.size/2)-p.x,(alv.y+alv.size/2)-p.y);if(dd<RED_RAIO_EXPLO+alv.size/2){const ka=Math.atan2((alv.y+alv.size/2)-p.y,(alv.x+alv.size/2)-p.x);const force=(1-dd/RED_RAIO_EXPLO)*18;alv.x+=Math.cos(ka)*force;alv.y+=Math.sin(ka)*force;if(alv!==m){if(alv.isRimuru)causarDanoRimuru(alv,p.dano*0.3,false);else causarDano(alv,p.dano*0.3);}}});
+            redExplosoes.push({x:p.x,y:p.y,timer:0,maxTimer:25});projectiles.splice(i,1);hitRed=true;break;
+          }}
           if(!hitRed&&(p.x<0||p.x>WORLD_WIDTH||p.y<0||p.y>WORLD_HEIGHT))projectiles.splice(i,1);
         }
       }
@@ -879,11 +1049,28 @@ useEffect(() => {
       ctx.fillText(`❤ ${Math.floor(Math.max(0,playerHp))} / ${status.hpMax}`,26,canvas.height-29);
       if(online){ctx.font='bold 10px monospace';ctx.textAlign='right';ctx.fillStyle='#4ade80';ctx.fillText(`🌐 ${qtJog}P`,canvas.width-10,20);}
       if(souHostRef.current&&online){ctx.font='bold 9px monospace';ctx.textAlign='right';ctx.fillStyle='#fbbf24';ctx.fillText('👑 HOST',canvas.width-10,34);}
+
+      // ── Indicador de onda ──
       ctx.font='bold 18px serif';ctx.textAlign='left';
-      const isBossWave=ondaAtual%5===0,isFinalWave=ondaAtual===TOTAL_ONDAS;
-      ctx.fillStyle=isFinalWave?'#ff6fff':isBossWave?'#fca5a5':'#e2e8f0';
-      ctx.shadowColor=isFinalWave?'#ff0090':isBossWave?'#dc2626':'#7c3aed';ctx.shadowBlur=12;
-      ctx.fillText(isFinalWave?'💀 BOSS FINAL !! 💀':isBossWave?`⚠ ONDA ${ondaAtual} — BOSS ⚠`:`⚔ ONDA ${ondaAtual} / ${TOTAL_ONDAS}`,20,38);ctx.shadowBlur=0;
+      const isRimuruWave = ondaAtual === TOTAL_ONDAS;
+      const isBossWave = ondaAtual === 5;
+      ctx.fillStyle = isRimuruWave ? '#c084fc' : isBossWave ? '#fca5a5' : '#e2e8f0';
+      ctx.shadowColor = isRimuruWave ? '#7c3aed' : isBossWave ? '#dc2626' : '#7c3aed';
+      ctx.shadowBlur = isRimuruWave ? 18 : 12;
+      ctx.fillText(
+        isRimuruWave ? '💜 RIMURU TEMPEST — BOSS FINAL 💜' :
+        isBossWave   ? `⚠ ONDA ${ondaAtual} — BOSS ⚠` :
+                       `⚔ ONDA ${ondaAtual} / ${TOTAL_ONDAS}`,
+        20, 38
+      );
+      ctx.shadowBlur=0;
+
+      // ── Aviso de ULT reduzida na onda do Rimuru ──
+      if(isRimuruWave && !rimuruCutsceneAtiva){
+        ctx.font='bold 9px monospace';ctx.textAlign='left';ctx.fillStyle='#fde68a';ctx.shadowColor='#fbbf24';ctx.shadowBlur=8;
+        ctx.fillText('⚡ ULTs: 50% de dano (Rimuru é resistente!)',20,56);ctx.shadowBlur=0;
+      }
+
       if(pocoes.length>0){ctx.font='bold 10px monospace';ctx.textAlign='left';ctx.fillStyle='#4ade80';ctx.shadowColor='#4ade80';ctx.shadowBlur=6;ctx.fillText(`✚ ${pocoes.length} poção${pocoes.length>1?'ões':''} no mapa`,20,canvas.height-56);ctx.shadowBlur=0;}
       desenharMinimapa(ctx,player.x,player.y,monstros,remotosRef.current,pocoes,WORLD_WIDTH,WORLD_HEIGHT,canvas.width,canvas.height,tick);
 
@@ -1010,7 +1197,7 @@ useEffect(() => {
       const s = socketRef.current;
       if(s){s.off('monstros_atualizados');s.off('aplicar_dano');s.off('onda_mudou');}
     };
-  }, [status, imgPlayer, imgArmaGuerr, imgArmaMago, imgGuerreiro, imgMago, imgSombrio, imgShadow, imgAizen]);
+  }, [status, imgPlayer, imgArmaGuerr, imgArmaMago, imgGuerreiro, imgMago, imgSombrio, imgShadow, imgAizen, imgRimuru]);
 
   return (
     <main className="relative min-h-screen bg-black flex flex-col items-center justify-center font-serif text-white overflow-hidden">
@@ -1032,7 +1219,7 @@ useEffect(() => {
           {status.classe==='sombrio'   && 'Z = ARISE (5 kills) · X = Igris+Beru [invulnerável] · '}
           {status.classe==='shadow'    && 'ESPAÇO = Shadow Slash · Z = Ebony Swirl · X = I AM ATOMIC [ultimate] · '}
           {status.classe==='aizen'     && 'CLIQUE = Ilusão · Z = Kyōka Suigetsu [INVENCÍVEL] · X = Hōgyoku Fusion [ultimate] · '}
-          ✚ Colete poções para curar · Mapa no canto superior esquerdo · Sobreviva até onda 20.
+          ✚ Colete poções · Sobreviva até onda 10 · Derrote Rimuru Tempest!
         </p>
       </div>
     </main>

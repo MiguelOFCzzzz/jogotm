@@ -9,7 +9,7 @@ export type Projetil      = { x:number; y:number; vx:number; vy:number; tipo:str
 export type AtaqueMelee   = { ativo:boolean; anguloAtual:number; duracao:number; dano:number };
 export type Monstro = {
   id:number; x:number; y:number; hp:number; maxHp:number; size:number;
-  cor:string; isBoss?:boolean; isFinalBoss?:boolean;
+  cor:string; isBoss?:boolean; isFinalBoss?:boolean; isRimuru?:boolean; rimuruFase?:1|2;
   tipo:TipoInimigo;
   breathe:number; breatheDir:number; breatheSpeed:number;
   corVariante:string; corBrilho:string; corOlho:string;
@@ -17,6 +17,7 @@ export type Monstro = {
   ataqueCd:number; ataqueCdMax:number;
   tentaculoAng?: number;
   raioCooldown?: number;
+  megiddoCd?: number;
 };
 export type ProjetilInimigo = { x:number; y:number; vx:number; vy:number; vida:number; dano:number; cor:string; corBrilho:string; homingTimer:number };
 export type RaioBoss      = { x:number; y:number; vx:number; vy:number; angulo:number; vida:number; homingTimer:number };
@@ -58,11 +59,9 @@ export function desenharCenarioEpico(
   worldW: number, worldH: number,
   tick: number
 ) {
-  // Fundo base — pedra escura
   ctx.fillStyle = '#0a0a12';
   ctx.fillRect(0, 0, worldW, worldH);
 
-  // Grade de pedras (tiles)
   const tileSize = 120;
   const cols = Math.ceil(worldW / tileSize) + 1;
   const rows = Math.ceil(worldH / tileSize) + 1;
@@ -71,18 +70,15 @@ export function desenharCenarioEpico(
     for (let col = 0; col < cols; col++) {
       const tx = col * tileSize;
       const ty = row * tileSize;
-      // Variação de cor por hash simples
       const hash = (col * 7 + row * 13) % 5;
       const baseColors = ['#0f0f1a','#0d0d18','#111120','#0c0c16','#101018'];
       ctx.fillStyle = baseColors[hash];
       ctx.fillRect(tx, ty, tileSize - 1, tileSize - 1);
 
-      // Bordas das pedras (linhas de rejunte)
       ctx.strokeStyle = 'rgba(255,255,255,0.03)';
       ctx.lineWidth = 1;
       ctx.strokeRect(tx, ty, tileSize - 1, tileSize - 1);
 
-      // Detalhe interno — rachadura leve
       if ((col + row) % 4 === 0) {
         ctx.strokeStyle = 'rgba(255,255,255,0.025)';
         ctx.lineWidth = 0.5;
@@ -102,14 +98,12 @@ export function desenharCenarioEpico(
     }
   }
 
-  // Pentagrama no centro do mapa — runas épicas
   const cx = worldW / 2, cy = worldH / 2;
   const runaR = 450;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(tick * 0.0008);
 
-  // Círculo externo da runa
   ctx.globalAlpha = 0.07 + 0.03 * Math.sin(tick * 0.02);
   ctx.strokeStyle = '#7c3aed';
   ctx.lineWidth = 3;
@@ -117,7 +111,6 @@ export function desenharCenarioEpico(
   ctx.shadowBlur = 20;
   ctx.beginPath(); ctx.arc(0, 0, runaR, 0, Math.PI * 2); ctx.stroke();
 
-  // Estrela de 5 pontas
   ctx.strokeStyle = '#4c1d95';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -129,7 +122,6 @@ export function desenharCenarioEpico(
   }
   ctx.closePath(); ctx.stroke();
 
-  // Círculo interno
   ctx.globalAlpha = 0.05;
   ctx.strokeStyle = '#a855f7';
   ctx.lineWidth = 2;
@@ -140,7 +132,6 @@ export function desenharCenarioEpico(
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // Segunda runa — giratória contrária
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(-tick * 0.0012);
@@ -158,7 +149,6 @@ export function desenharCenarioEpico(
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // Velas nos cantos do mapa
   const cantoPositions = [
     { x: 80, y: 80 }, { x: worldW - 80, y: 80 },
     { x: 80, y: worldH - 80 }, { x: worldW - 80, y: worldH - 80 },
@@ -169,10 +159,8 @@ export function desenharCenarioEpico(
     const flicker = 0.6 + 0.4 * Math.sin(tick * 0.15 + i * 1.3);
     ctx.save();
     ctx.translate(pos.x, pos.y);
-    // Base da vela
     ctx.fillStyle = '#1c1917';
     ctx.fillRect(-4, -14, 8, 18);
-    // Chama
     ctx.globalAlpha = flicker;
     ctx.fillStyle = '#fbbf24';
     ctx.shadowColor = '#f59e0b';
@@ -182,7 +170,6 @@ export function desenharCenarioEpico(
     ctx.bezierCurveTo(5, -22, 3, -30, 0, -32);
     ctx.bezierCurveTo(-3, -30, -5, -22, 0, -14);
     ctx.fill();
-    // Brilho da chama (aura no chão)
     const glow = ctx.createRadialGradient(0, -14, 0, 0, 0, 35 * flicker);
     glow.addColorStop(0, `rgba(251,191,36,${0.12 * flicker})`);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -193,25 +180,19 @@ export function desenharCenarioEpico(
     ctx.restore();
   });
 
-  // Bordas do mapa — paredes de pedra sólida
   const wallThick = 40;
   const wallGrad = ctx.createLinearGradient(0, 0, wallThick, 0);
   wallGrad.addColorStop(0, '#1a1a2e');
   wallGrad.addColorStop(1, 'rgba(0,0,0,0)');
-  // Esquerda
   ctx.fillStyle = wallGrad; ctx.fillRect(0, 0, wallThick, worldH);
-  // Direita
   ctx.save(); ctx.translate(worldW, 0); ctx.scale(-1, 1);
   ctx.fillRect(0, 0, wallThick, worldH); ctx.restore();
-  // Cima
   const wallGradH = ctx.createLinearGradient(0, 0, 0, wallThick);
   wallGradH.addColorStop(0, '#1a1a2e'); wallGradH.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = wallGradH; ctx.fillRect(0, 0, worldW, wallThick);
-  // Baixo
   ctx.save(); ctx.translate(0, worldH); ctx.scale(1, -1);
   ctx.fillRect(0, 0, worldW, wallThick); ctx.restore();
 
-  // Linha de borda luminosa do mapa
   ctx.strokeStyle = 'rgba(124,58,237,0.3)';
   ctx.lineWidth = 3;
   ctx.strokeRect(2, 2, worldW - 4, worldH - 4);
@@ -224,21 +205,18 @@ export function desenharPocao(ctx: CanvasRenderingContext2D, p: Pocao) {
   const bob = Math.sin(p.pulso) * 3;
   ctx.translate(0, bob);
 
-  // Aura de brilho
   const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 22);
   aura.addColorStop(0, 'rgba(74,222,128,0.4)');
   aura.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = aura;
   ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
 
-  // Corpo da poção
   ctx.fillStyle = '#15803d';
   ctx.strokeStyle = '#4ade80';
   ctx.lineWidth = 1.5;
   ctx.shadowColor = '#4ade80';
   ctx.shadowBlur = 12;
 
-  // Frasco
   ctx.beginPath();
   ctx.moveTo(-5, -8);
   ctx.lineTo(-5, -4);
@@ -248,16 +226,13 @@ export function desenharPocao(ctx: CanvasRenderingContext2D, p: Pocao) {
   ctx.closePath();
   ctx.fill(); ctx.stroke();
 
-  // Gargalo
   ctx.fillStyle = '#166534';
   ctx.beginPath(); ctx.rect(-4, -12, 8, 5); ctx.fill();
   ctx.strokeRect(-4, -12, 8, 5);
 
-  // Tampa
   ctx.fillStyle = '#4ade80';
   ctx.beginPath(); ctx.rect(-5, -14, 10, 3); ctx.fill();
 
-  // Brilho interno
   ctx.globalAlpha = 0.5 + 0.3 * Math.sin(p.pulso * 2);
   const liq = ctx.createLinearGradient(-8, -2, 8, 12);
   liq.addColorStop(0, 'rgba(134,239,172,0.8)');
@@ -269,7 +244,6 @@ export function desenharPocao(ctx: CanvasRenderingContext2D, p: Pocao) {
   ctx.bezierCurveTo(-10, 12, -10, 4, -4, 0);
   ctx.fill();
 
-  // Cruz de cura
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(-1.5, 4, 3, 7);
@@ -280,7 +254,7 @@ export function desenharPocao(ctx: CanvasRenderingContext2D, p: Pocao) {
   ctx.restore();
 }
 
-// ─── Marcação de jogador (seta + círculo no chão) ─────────────────────────────
+// ─── Marcação de jogador ──────────────────────────────────────────────────────
 export function desenharMarcacaoJogador(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -294,7 +268,6 @@ export function desenharMarcacaoJogador(
 
   ctx.save();
 
-  // Sombra elíptica no chão
   ctx.globalAlpha = 0.35 * pulso;
   const shadow = ctx.createRadialGradient(cx, cy + size * 0.4, 0, cx, cy + size * 0.4, size * 0.55);
   shadow.addColorStop(0, cor);
@@ -304,7 +277,6 @@ export function desenharMarcacaoJogador(
   ctx.ellipse(cx, cy + size * 0.38, size * 0.5, size * 0.18, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Círculo de chão pulsante
   ctx.globalAlpha = 0.5 * pulso;
   ctx.strokeStyle = cor;
   ctx.lineWidth = 2;
@@ -316,7 +288,6 @@ export function desenharMarcacaoJogador(
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Seta apontando para baixo (marcador acima do personagem)
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = cor;
   ctx.shadowColor = cor;
@@ -348,12 +319,11 @@ export function desenharMarcacaoInimigo(
   tick: number
 ) {
   const cx = m.x + m.size / 2, cy = m.y + m.size / 2;
-  const cor = m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff4444' : '#ef4444';
+  const cor = m.isRimuru ? '#a855f7' : m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff4444' : '#ef4444';
   const pulso = 0.6 + 0.4 * Math.sin(tick * 0.1 + m.id * 0.5);
 
   ctx.save();
 
-  // Sombra elíptica
   ctx.globalAlpha = 0.25 * pulso;
   const shadow = ctx.createRadialGradient(cx, cy + m.size * 0.4, 0, cx, cy + m.size * 0.4, m.size * 0.5);
   shadow.addColorStop(0, cor);
@@ -363,11 +333,10 @@ export function desenharMarcacaoInimigo(
   ctx.ellipse(cx, cy + m.size * 0.38, m.size * 0.48, m.size * 0.16, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Círculo de chão (apenas para boss)
-  if (m.isBoss) {
+  if (m.isBoss || m.isRimuru) {
     ctx.globalAlpha = 0.45 * pulso;
     ctx.strokeStyle = cor;
-    ctx.lineWidth = m.isFinalBoss ? 3 : 2;
+    ctx.lineWidth = m.isRimuru ? 3 : m.isFinalBoss ? 3 : 2;
     ctx.shadowColor = cor;
     ctx.shadowBlur = 20;
     ctx.setLineDash([6, 4]);
@@ -394,13 +363,12 @@ export function desenharMinimapa(
   tick: number
 ) {
   const MAP_W = 160, MAP_H = 110;
-  const MAP_X = 14, MAP_Y = 54; // abaixo do HUD de onda
+  const MAP_X = 14, MAP_Y = 54;
   const scaleX = MAP_W / worldW;
   const scaleY = MAP_H / worldH;
 
   ctx.save();
 
-  // Fundo do minimapa
   ctx.fillStyle = 'rgba(5,5,15,0.88)';
   ctx.strokeStyle = 'rgba(124,58,237,0.6)';
   ctx.lineWidth = 1.5;
@@ -408,16 +376,13 @@ export function desenharMinimapa(
   ctx.roundRect(MAP_X - 2, MAP_Y - 2, MAP_W + 4, MAP_H + 4, 5);
   ctx.fill(); ctx.stroke();
 
-  // Clip para o minimapa
   ctx.beginPath();
   ctx.roundRect(MAP_X, MAP_Y, MAP_W, MAP_H, 4);
   ctx.clip();
 
-  // Fundo interno
   ctx.fillStyle = '#080812';
   ctx.fillRect(MAP_X, MAP_Y, MAP_W, MAP_H);
 
-  // Runa central no minimapa
   ctx.globalAlpha = 0.15;
   ctx.strokeStyle = '#7c3aed';
   ctx.lineWidth = 0.8;
@@ -426,12 +391,10 @@ export function desenharMinimapa(
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  // Bordas do mapa
   ctx.strokeStyle = 'rgba(124,58,237,0.3)';
   ctx.lineWidth = 1;
   ctx.strokeRect(MAP_X, MAP_Y, MAP_W, MAP_H);
 
-  // Poções — pontos verdes pequenos
   pocoes.forEach(p => {
     const mx = MAP_X + p.x * scaleX;
     const my = MAP_Y + p.y * scaleY;
@@ -440,19 +403,17 @@ export function desenharMinimapa(
     ctx.beginPath(); ctx.arc(mx, my, 2.5, 0, Math.PI * 2); ctx.fill();
   });
 
-  // Inimigos — pontos vermelhos
   monstros.forEach(m => {
     const mx = MAP_X + (m.x + m.size / 2) * scaleX;
     const my = MAP_Y + (m.y + m.size / 2) * scaleY;
-    const r = m.isFinalBoss ? 5 : m.isBoss ? 4 : 2.5;
+    const r = m.isRimuru ? 6 : m.isFinalBoss ? 5 : m.isBoss ? 4 : 2.5;
     ctx.globalAlpha = 0.9;
-    ctx.fillStyle = m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff6666' : '#ef4444';
-    if (m.isBoss) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6; }
+    ctx.fillStyle = m.isRimuru ? '#a855f7' : m.isFinalBoss ? '#ff00cc' : m.isBoss ? '#ff6666' : '#ef4444';
+    if (m.isBoss || m.isRimuru) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6; }
     ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
   });
 
-  // Aliados remotos — pontos azuis
   Object.values(remotos).forEach(jr => {
     const mx = MAP_X + (jr.x + 40) * scaleX;
     const my = MAP_Y + (jr.y + 40) * scaleY;
@@ -463,7 +424,6 @@ export function desenharMinimapa(
     ctx.shadowBlur = 0;
   });
 
-  // Jogador principal — ponto branco/verde pulsante
   const px = MAP_X + (playerX + 40) * scaleX;
   const py = MAP_Y + (playerY + 40) * scaleY;
   const pulso = 0.7 + 0.3 * Math.sin(tick * 0.2);
@@ -471,7 +431,6 @@ export function desenharMinimapa(
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = '#a3e635'; ctx.shadowBlur = 10;
   ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
-  // Círculo externo
   ctx.globalAlpha = pulso * 0.5;
   ctx.strokeStyle = '#a3e635'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
@@ -479,13 +438,11 @@ export function desenharMinimapa(
 
   ctx.restore();
 
-  // Label "MAPA"
   ctx.font = 'bold 8px monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(167,139,250,0.8)';
   ctx.fillText('⬛ MAPA', MAP_X + 2, MAP_Y - 4);
 
-  // Legenda
   ctx.font = '7px monospace';
   ctx.fillStyle = '#4ade80'; ctx.fillText('● Você', MAP_X + MAP_W + 6, MAP_Y + 10);
   ctx.fillStyle = '#60a5fa'; ctx.fillText('● Aliado', MAP_X + MAP_W + 6, MAP_Y + 20);
@@ -500,7 +457,6 @@ export function desenharJogadorRemoto(
   imgs: { guerreiro: HTMLImageElement|null; mago: HTMLImageElement|null; sombrio: HTMLImageElement|null; aizen: HTMLImageElement|null; shadow: HTMLImageElement|null },
   tick: number
 ) {
-  // Marcação de aliado (azul)
   desenharMarcacaoJogador(ctx, jr.x, jr.y, 80, '#3b82f6', tick, jr.nome);
 
   const img = imgs[jr.classe as keyof typeof imgs] ?? null;
@@ -514,7 +470,6 @@ export function desenharJogadorRemoto(
 
 // ─── Slime / Monstro ──────────────────────────────────────────────────────────
 export function desenharSlime(ctx: CanvasRenderingContext2D, m: Monstro, tick?: number) {
-  // Marcação vermelha no chão
   if (tick !== undefined) desenharMarcacaoInimigo(ctx, m, tick);
 
   const cx=m.x+m.size/2, cy=m.y+m.size/2, r=m.size/2;
@@ -613,9 +568,8 @@ export function desenharSlime(ctx: CanvasRenderingContext2D, m: Monstro, tick?: 
   ctx.fillText(m.isBoss?'☠ BOSS ☠':iconeTipo(m.tipo), cx, by2-4);
 }
 
-// ─── Boss Final ───────────────────────────────────────────────────────────────
+// ─── Boss Final (legado) ───────────────────────────────────────────────────────
 export function desenharFinalBoss(ctx: CanvasRenderingContext2D, m: Monstro, tick: number) {
-  // Marcação de boss final (rosa/magenta pulsante)
   desenharMarcacaoInimigo(ctx, m, tick);
 
   const cx=m.x+m.size/2, cy=m.y+m.size/2, r=m.size/2;
@@ -681,6 +635,375 @@ export function desenharFinalBoss(ctx: CanvasRenderingContext2D, m: Monstro, tic
   ctx.fillText(`${Math.max(0,Math.floor(m.hp))} / ${m.maxHp}`,cx,by2+20);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  RIMURU TEMPEST — Boss Final Onda 10
+// ═══════════════════════════════════════════════════════════════
+
+export const RIMURU_HP_FASE1 = 28000;
+export const RIMURU_HP_FASE2 = 28000; // total = 56000
+export const RIMURU_IMG_URL  = 'https://www.pngmart.com/files/23/Rimuru-PNG-HD.png';
+
+// Cache de fallback (usado só se imgExterno não for passado)
+let _rimuruImg: HTMLImageElement | null = null;
+function getRimuruImg(): HTMLImageElement {
+  if (!_rimuruImg) {
+    _rimuruImg = new Image();
+    _rimuruImg.crossOrigin = 'anonymous';
+    _rimuruImg.src = RIMURU_IMG_URL;
+  }
+  return _rimuruImg;
+}
+
+// ── PATCH 1 + 2: aceita imgExterno, usa ela se disponível ──
+export function desenharRimuruBoss(
+  ctx: CanvasRenderingContext2D,
+  m: Monstro,
+  tick: number,
+  canvasW: number,
+  canvasH: number,
+  imgExterno?: HTMLImageElement | null
+) {
+  desenharMarcacaoInimigo(ctx, m, tick);
+
+  const cx = m.x + m.size / 2, cy = m.y + m.size / 2;
+  const r = m.size / 2;
+  const fase = m.rimuruFase ?? 1;
+  const hox = m.hitTimer > 0 ? (Math.random() - .5) * 10 : 0;
+  const hoy = m.hitTimer > 0 ? (Math.random() - .5) * 10 : 0;
+  if (m.hitTimer > 0) m.hitTimer--;
+
+  // ── AURA TENEBROSA DE LORDE DEMÔNIO ──
+  const auraR1 = r * 2.8 + Math.sin(tick * 0.03) * 20;
+  const auraR2 = r * 1.8 + Math.sin(tick * 0.05) * 12;
+
+  ctx.save(); ctx.translate(cx + hox, cy + hoy);
+
+  // Aura externa – roxo sombrio
+  const auraG1 = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, auraR1);
+  auraG1.addColorStop(0, 'rgba(139,0,255,0.35)');
+  auraG1.addColorStop(0.4, 'rgba(88,28,135,0.25)');
+  auraG1.addColorStop(0.7, 'rgba(40,0,80,0.18)');
+  auraG1.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = auraG1;
+  ctx.shadowColor = '#7c3aed'; ctx.shadowBlur = 55;
+  ctx.beginPath(); ctx.arc(0, 0, auraR1, 0, Math.PI * 2); ctx.fill();
+
+  // Aura interna pulsante
+  const auraG2 = ctx.createRadialGradient(0, 0, 0, 0, 0, auraR2);
+  if (fase === 2) {
+    auraG2.addColorStop(0, 'rgba(255,215,0,0.45)');
+    auraG2.addColorStop(0.3, 'rgba(168,85,247,0.35)');
+    auraG2.addColorStop(1, 'rgba(0,0,0,0)');
+  } else {
+    auraG2.addColorStop(0, 'rgba(168,85,247,0.45)');
+    auraG2.addColorStop(0.3, 'rgba(88,28,135,0.3)');
+    auraG2.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  ctx.fillStyle = auraG2;
+  ctx.beginPath(); ctx.arc(0, 0, auraR2, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Anéis giratórios de magicule
+  for (let ring = 0; ring < 4; ring++) {
+    const ringR = r * (1.1 + ring * 0.38);
+    const rotSpeed = ring % 2 === 0 ? 0.025 : -0.018;
+    const rotAng = tick * rotSpeed + ring * Math.PI / 4;
+    ctx.globalAlpha = 0.5 - ring * 0.08;
+    ctx.strokeStyle = fase === 2
+      ? (ring % 2 === 0 ? '#fde68a' : '#a855f7')
+      : (ring % 2 === 0 ? '#c084fc' : '#7c3aed');
+    ctx.lineWidth = 2 - ring * 0.3;
+    ctx.shadowColor = fase === 2 ? '#fbbf24' : '#9333ea';
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([8 + ring * 4, 6 + ring * 2]);
+    ctx.beginPath(); ctx.arc(0, 0, ringR, rotAng, rotAng + Math.PI * 1.6); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, ringR, rotAng + Math.PI, rotAng + Math.PI * 2.6); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.shadowBlur = 0;
+
+  // Partículas orbitando
+  for (let p = 0; p < 12; p++) {
+    const pa = tick * 0.06 + p * (Math.PI * 2 / 12);
+    const pd = r * (1.5 + Math.sin(tick * 0.08 + p * 0.7) * 0.3);
+    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(tick * 0.1 + p);
+    ctx.fillStyle = fase === 2
+      ? (p % 3 === 0 ? '#fde68a' : p % 3 === 1 ? '#a855f7' : '#fff')
+      : (p % 3 === 0 ? '#e879f9' : p % 3 === 1 ? '#a855f7' : '#c084fc');
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(Math.cos(pa) * pd, Math.sin(pa) * pd * 0.75, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+  // ── sem fallback visual — PNG desenhado no page.tsx ──
+
+  // Overlay dourado fase 2
+  if (fase === 2) {
+    ctx.save();
+    ctx.globalAlpha = 0.15 + 0.1 * Math.sin(tick * 0.12);
+    const goldG = ctx.createRadialGradient(0, -r * 0.3, 0, 0, 0, r * 1.2);
+    goldG.addColorStop(0, 'rgba(253,230,138,0.8)');
+    goldG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = goldG;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // ── BARRA DE HP ESPECIAL RIMURU ──
+  desenharRimuruHpBar(ctx, m, cx, tick);
+}
+
+// ─── Interface de HP do Rimuru ─────────────────────────────────────────────────
+export function desenharRimuruHpBar(
+  ctx: CanvasRenderingContext2D,
+  m: Monstro,
+  cx: number,
+  tick: number
+) {
+  const fase = m.rimuruFase ?? 1;
+  const bw = Math.max(360, m.size * 1.8);
+  const bx = cx - bw / 2;
+  const by = m.y - 60;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.strokeStyle = fase === 2 ? '#fbbf24' : '#7c3aed';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = fase === 2 ? '#fbbf24' : '#9333ea';
+  ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, bw + 4, 32, 8); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  const hpPct = Math.max(0, m.hp / m.maxHp);
+  const hpBarW = bw * hpPct;
+
+  const hpGrad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+  if (fase === 2) {
+    hpGrad.addColorStop(0, '#4c1d95');
+    hpGrad.addColorStop(0.3, '#fbbf24');
+    hpGrad.addColorStop(0.6, '#f59e0b');
+    hpGrad.addColorStop(1, '#fde68a');
+  } else {
+    hpGrad.addColorStop(0, '#1e1b4b');
+    hpGrad.addColorStop(0.3, '#6d28d9');
+    hpGrad.addColorStop(0.6, '#9333ea');
+    hpGrad.addColorStop(1, '#c084fc');
+  }
+  ctx.fillStyle = hpGrad;
+  ctx.beginPath(); ctx.roundRect(bx, by, hpBarW, 28, 6); ctx.fill();
+
+  if (hpPct > 0.05) {
+    const shimmerX = bx + (tick * 3 % (bw + 80)) - 40;
+    const shimmerG = ctx.createLinearGradient(shimmerX, 0, shimmerX + 80, 0);
+    shimmerG.addColorStop(0, 'rgba(255,255,255,0)');
+    shimmerG.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+    shimmerG.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shimmerG;
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(bx, by, hpBarW, 28, 6); ctx.clip();
+    ctx.fillRect(shimmerX, by, 80, 28);
+    ctx.restore();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = fase === 2 ? '#fbbf24' : '#9333ea'; ctx.shadowBlur = 8;
+  ctx.fillText(
+    fase === 2
+      ? `⚡ RIMURU TEMPEST — Forma Lorde Demônio ⚡`
+      : `💧 RIMURU TEMPEST — Slime Primordial 💧`,
+    cx, by - 8
+  );
+  ctx.shadowBlur = 0;
+
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#fde68a';
+  ctx.fillText(`${Math.max(0, Math.floor(m.hp)).toLocaleString()} / ${m.maxHp.toLocaleString()} HP`, cx, by + 18);
+
+  const faseX = bx + bw + 10;
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 10px monospace';
+  ctx.fillStyle = fase === 2 ? '#fde68a' : '#c084fc';
+  ctx.shadowColor = fase === 2 ? '#fbbf24' : '#9333ea'; ctx.shadowBlur = 10;
+  ctx.fillText(`FASE ${fase}/2`, faseX, by + 18);
+  ctx.shadowBlur = 0;
+
+  const slimeX = bx - 28, slimeY = by + 14;
+  const pulse = 0.85 + 0.15 * Math.sin(tick * 0.15);
+  ctx.save();
+  ctx.translate(slimeX, slimeY);
+  ctx.scale(pulse, pulse);
+  const slimeIconG = ctx.createRadialGradient(0, 0, 0, 0, 0, 14);
+  if (fase === 2) {
+    slimeIconG.addColorStop(0, '#fef9c3'); slimeIconG.addColorStop(0.5, '#fbbf24'); slimeIconG.addColorStop(1, '#92400e');
+  } else {
+    slimeIconG.addColorStop(0, '#bfdbfe'); slimeIconG.addColorStop(0.5, '#3b82f6'); slimeIconG.addColorStop(1, '#1e3a8a');
+  }
+  ctx.fillStyle = slimeIconG;
+  ctx.shadowColor = fase === 2 ? '#fbbf24' : '#60a5fa'; ctx.shadowBlur = 16;
+  ctx.beginPath();
+  ctx.moveTo(0, -14);
+  ctx.bezierCurveTo(8, -14, 14, -6, 14, 0);
+  ctx.bezierCurveTo(14, 8, 8, 14, 0, 14);
+  ctx.bezierCurveTo(-8, 14, -14, 8, -14, 0);
+  ctx.bezierCurveTo(-14, -6, -8, -14, 0, -14);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = fase === 2 ? '#fde68a' : '#fff';
+  ctx.beginPath(); ctx.arc(-4, -2, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -2, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(-4, -2, 1.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -2, 1.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// ─── Cutscene de aparição do Rimuru ───────────────────────────────────────────
+export const RIMURU_CUTSCENE_DUR = 300;
+
+// ── PATCH 3 + 4: aceita imgExterno, usa ela se disponível ──
+export function desenharRimuruCutscene(
+  ctx: CanvasRenderingContext2D,
+  timer: number, tick: number,
+  canvasW: number, canvasH: number,
+  imgExterno?: HTMLImageElement | null
+) {
+  const W = canvasW, H = canvasH;
+  const prog = timer / RIMURU_CUTSCENE_DUR;
+  const fadeIn  = Math.min(1, timer / 40);
+  const fadeOut = timer > RIMURU_CUTSCENE_DUR - 50 ? Math.max(0, 1 - (timer - (RIMURU_CUTSCENE_DUR - 50)) / 50) : 1;
+  const alpha   = fadeIn * fadeOut;
+
+  if (alpha <= 0) return;
+
+  ctx.save();
+
+  ctx.globalAlpha = alpha * 0.97;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  const bgG = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, H * 0.9);
+  bgG.addColorStop(0, 'rgba(76,29,149,0.55)');
+  bgG.addColorStop(0.5, 'rgba(30,0,60,0.4)');
+  bgG.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = bgG;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalAlpha = alpha * (0.15 + 0.1 * Math.sin(tick * 0.08));
+  for (let ray = 0; ray < 24; ray++) {
+    const ra = (ray / 24) * Math.PI * 2 + tick * 0.012;
+    const rl = H * 0.8 + Math.sin(tick * 0.05 + ray) * 50;
+    ctx.strokeStyle = ray % 3 === 0 ? '#a855f7' : ray % 3 === 1 ? '#6d28d9' : '#c084fc';
+    ctx.lineWidth = 1 + Math.sin(tick * 0.06 + ray) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(W / 2, H / 2);
+    ctx.lineTo(W / 2 + Math.cos(ra) * rl, H / 2 + Math.sin(ra) * rl);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = alpha * 0.4;
+  for (let ring = 0; ring < 5; ring++) {
+    const rProg = ((tick * 1.5 + ring * 40) % 200) / 200;
+    const rR = rProg * H * 0.7;
+    const rAlpha = (1 - rProg) * alpha * 0.6;
+    ctx.globalAlpha = rAlpha;
+    ctx.strokeStyle = ring % 2 === 0 ? '#9333ea' : '#6d28d9';
+    ctx.lineWidth = 3 - rProg * 2;
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, rR, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  ctx.globalAlpha = alpha;
+
+  // ── IMAGEM NA CUTSCENE — desenhada aqui se imgExterno disponível ──
+  if (imgExterno && imgExterno.complete && imgExterno.naturalWidth > 0) {
+    const imgW = 260, imgH = 420;
+    const imgX = W * 0.62 - imgW / 2;
+    const imgY = H * 0.42 - imgH / 2;
+    ctx.save();
+    ctx.shadowColor = '#9333ea';
+    ctx.shadowBlur = 60 + Math.sin(tick * 0.1) * 20;
+    ctx.globalAlpha = alpha * 0.92;
+    ctx.drawImage(imgExterno, imgX, imgY, imgW, imgH);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  const textAlpha = Math.min(1, timer / 50) * fadeOut;
+  ctx.save();
+  ctx.globalAlpha = textAlpha;
+  ctx.textAlign = 'left';
+
+  ctx.font = 'bold 44px serif';
+  ctx.fillStyle = '#faf5ff';
+  ctx.shadowColor = '#9333ea'; ctx.shadowBlur = 35 + Math.sin(tick * 0.1) * 12;
+  ctx.fillText('Rimuru Tempest', W * 0.06, H * 0.28);
+  ctx.shadowBlur = 0;
+
+  ctx.font = 'bold 18px monospace';
+  ctx.fillStyle = '#c084fc';
+  ctx.shadowColor = '#7c3aed'; ctx.shadowBlur = 14;
+  ctx.fillText('リムル・テンペスト', W * 0.06, H * 0.28 + 32);
+  ctx.shadowBlur = 0;
+
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = '#e9d5ff';
+  ctx.shadowColor = '#a855f7'; ctx.shadowBlur = 10;
+  ctx.fillText('Grande Lorde Demônio · Rei de Tempest', W * 0.06, H * 0.28 + 58);
+  ctx.shadowBlur = 0;
+
+  if (timer > 80) {
+    const abilAlpha = Math.min(1, (timer - 80) / 40) * fadeOut;
+    ctx.globalAlpha = abilAlpha;
+    const habilidades = [
+      '▸ Raphael — Lord of Wisdom',
+      '▸ Beelzebuth — Lord of Gluttony',
+      '▸ Uriel — Lord of Vows',
+      '▸ Veldora — Lord of Storms',
+      '▸ Megiddo — God\'s Wrath',
+      '▸ Regeneração Infinita',
+    ];
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#a78bfa';
+    habilidades.forEach((h, i) => {
+      ctx.fillText(h, W * 0.06, H * 0.5 + i * 22);
+    });
+  }
+
+  if (timer > 160) {
+    const quoteAlpha = Math.min(1, (timer - 160) / 35) * fadeOut;
+    ctx.globalAlpha = quoteAlpha;
+    ctx.font = 'italic bold 13px serif';
+    ctx.fillStyle = '#fde68a';
+    ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12;
+    ctx.fillText('"Não sou um monstro... sou um Rei."', W * 0.06, H * 0.86);
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.globalAlpha = textAlpha * (0.8 + 0.2 * Math.sin(tick * 0.3));
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = '#f0abfc';
+  ctx.shadowColor = '#9333ea'; ctx.shadowBlur = 16;
+  ctx.fillText('⚠  BOSS FINAL — ONDA 10 / 10  ⚠', W / 2, H * 0.94);
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(W * 0.1, H - 12, W * 0.8, 5);
+  ctx.fillStyle = '#a855f7'; ctx.fillRect(W * 0.1, H - 12, W * 0.8 * prog, 5);
+
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 // ─── Projétil inimigo ─────────────────────────────────────────────────────────
 export function desenharProjetilInimigo(ctx: CanvasRenderingContext2D, p: ProjetilInimigo) {
   ctx.save(); ctx.translate(p.x,p.y);
@@ -695,7 +1018,6 @@ export function desenharProjetilInimigo(ctx: CanvasRenderingContext2D, p: Projet
 
 // ─── Aliado sombrio ───────────────────────────────────────────────────────────
 export function desenharAliado(ctx: CanvasRenderingContext2D, a: SlimeAliado, tick: number) {
-  // Marcação de aliado (ciano/verde)
   desenharMarcacaoJogador(ctx, a.x, a.y, a.size, '#06b6d4', tick);
 
   const cx=a.x+a.size/2, cy=a.y+a.size/2, r=a.size/2, bs=1+Math.sin(a.breathe)*.07;
@@ -1494,7 +1816,6 @@ export function desenharKyokaSuigetsu(
   ctx.beginPath(); ctx.rect(cx2 - cSize * .7, bY - cSize * .15, cSize * 1.4, cSize * .3); ctx.fill(); ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // ── INVULNERÁVEL durante Kyōka Suigetsu ──
   ctx.globalAlpha = alpha * (.7 + .3 * Math.sin(tick * .2));
   ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
   ctx.fillStyle = '#fde68a'; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12;
