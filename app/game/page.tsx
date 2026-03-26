@@ -97,7 +97,11 @@ export default function Jogo2D() {
 
     // 2. Tenta pegar o código da sala pela URL (?sala=XXXX), se não tiver, usa o localStorage
     const params = new URLSearchParams(window.location.search);
-    const codigoSala = params.get('sala') || localStorage.getItem('glory_dark_last_sala') || 'default';
+    const codigoSala = params.get('sala') || localStorage.getItem('glory_dark_last_sala') || '';
+if (!codigoSala) {
+  window.location.href = '/';
+  return;
+}
 
     const s = io(socketURL, { 
       transports: ['websocket'],
@@ -109,6 +113,7 @@ export default function Jogo2D() {
     s.on('connect', () => {
       setOnline(true);
       console.log("⚔️ Conectado ao servidor. Sala:", codigoSala);
+      localStorage.setItem('glory_dark_last_sala', codigoSala);
       
       // Envia os dados para entrar na partida
       s.emit('entrar_no_jogo', { 
