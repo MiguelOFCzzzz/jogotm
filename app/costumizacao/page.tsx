@@ -15,7 +15,7 @@ const CLASSES: Classe[] = [
   { 
     id: 'guerreiro', nome: 'SUKUNA', 
     descricao: 'FUKUMA MIZUSHI...',
-    imagem: '👑', 
+    imagem: '⛩️', 
     atributos: { str: 10, agi: 4, int: 2, vit: 9 } 
   },
   { 
@@ -27,7 +27,7 @@ const CLASSES: Classe[] = [
   { 
     id: 'sombrio', nome: 'Sung Jin-Woo', 
     descricao: 'ARISE SHADOW LEGION...',
-    imagem: '💀', 
+    imagem: '🆙', 
     atributos: { str: 5, agi: 10, int: 5, vit: 3 } 
   },
   {
@@ -41,7 +41,7 @@ const CLASSES: Classe[] = [
     id: 'aizen',
     nome: 'AIZEN',
     descricao: 'KANZEN SAIMIN...',
-    imagem: '🪞',
+    imagem: '🥋',
     atributos: { str: 4, agi: 6, int: 10, vit: 7 },
   },
 ];

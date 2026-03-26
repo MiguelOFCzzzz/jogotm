@@ -95,11 +95,11 @@ export default function RpgLobby() {
 
   // 5 classes disponíveis para exibição no lobby
   const PREVIEW_CLASSES = [
-    { id: 'guerreiro', emoji: '👑', nome: 'SUKUNA' },
+    { id: 'guerreiro', emoji: '⛩️', nome: 'SUKUNA' },
     { id: 'mago',      emoji: '🤞', nome: 'GOJO'   },
-    { id: 'sombrio',   emoji: '💀', nome: 'JIN-WOO'},
+    { id: 'sombrio',   emoji: '🆙', nome: 'SUNG JIN-WOO'},
     { id: 'shadow',    emoji: '☢️', nome: 'SHADOW', mitico: true },
-    { id: 'aizen',     emoji: '🪞', nome: 'AIZEN',  mitico: true },
+    { id: 'aizen',     emoji: '🥋', nome: 'AIZEN',  mitico: true },
   ];
 
   return (
