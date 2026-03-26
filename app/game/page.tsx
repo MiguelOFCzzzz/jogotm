@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { getSocketUrl } from '@/app/lib/socket-url';
 import { io, Socket } from 'socket.io-client';
 import {
   type TipoInimigo, type Projetil, type AtaqueMelee, type Monstro,

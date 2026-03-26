@@ -1,44 +1,77 @@
-import { db } from '../../../../lib/db';
-import { NextResponse } from 'next/server';
+// app/api/personagem/route.ts
+// Rota de API para salvar personagem — compatível com Railway (sem banco externo obrigatório)
 
-export async function GET(
-  req: Request, 
-  { params }: { params: Promise<{ codigo: string }> }
-) {
+import { NextRequest, NextResponse } from 'next/server';
+
+// ── Armazenamento em memória (substitua por banco real se quiser persistência) ──
+// No Railway, cada deploy reseta a memória. Para persistência real, use
+// Postgres (Railway tem addon gratuito) ou um KV store.
+const personagens: Map<string, unknown> = new Map();
+
+export async function POST(req: NextRequest) {
   try {
-    // 1. Resolvemos a Promise do parâmetro dinâmico [codigo]
-    const resolvedParams = await params;
-    const codigo = resolvedParams.codigo;
+    const body = await req.json();
+    const { nome, classe, str, agi, int: intStat, vit, sala_codigo } = body;
 
-    console.log(`--- Buscando Heróis para a Sala: ${codigo} ---`);
+    // Validação básica
+    if (!nome || !classe || !sala_codigo) {
+      return NextResponse.json(
+        { error: 'Campos obrigatórios ausentes: nome, classe, sala_codigo' },
+        { status: 400 }
+      );
+    }
 
-    // 2. Query com JOIN para garantir que pegamos os heróis da sala certa
-    const [herois]: any = await db.execute(`
-      SELECT 
-        p.id, p.nome, p.classe, p.nivel, 
-        p.str, p.agi, p.int, p.vit, p.sala_id 
-      FROM personagens p
-      JOIN salas s ON p.sala_id = s.id
-      WHERE s.codigo = ?
-    `, [codigo]);
+    const classesValidas = ['guerreiro', 'mago', 'sombrio', 'shadow', 'aizen'];
+    if (!classesValidas.includes(classe)) {
+      return NextResponse.json(
+        { error: `Classe inválida: ${classe}` },
+        { status: 400 }
+      );
+    }
 
-    console.log(`Sucesso! Encontrados ${herois.length} heróis.`);
+    // Monta o personagem
+    const personagem = {
+      id: `${sala_codigo}_${nome}_${Date.now()}`,
+      nome: String(nome).slice(0, 32),
+      classe,
+      str:  Number(str)  || 10,
+      agi:  Number(agi)  || 10,
+      int:  Number(intStat) || 10,
+      vit:  Number(vit)  || 10,
+      sala_codigo,
+      criadoEm: new Date().toISOString(),
+    };
 
-    // 3. Forçamos o retorno como JSON com cabeçalhos limpos
-    return new NextResponse(JSON.stringify(herois), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Salva em memória (chave = sala + nome)
+    const chave = `${sala_codigo}:${nome}`;
+    personagens.set(chave, personagem);
 
-  } catch (error: any) {
-    console.error("ERRO NO BANCO (API/HEROIS):", error.message);
-    
-    return new NextResponse(
-      JSON.stringify({ error: "Falha na invocação", details: error.message }), 
-      { 
-        status: 500, 
-        headers: { 'Content-Type': 'application/json' } 
-      }
+    console.log(`[API] Personagem criado: ${nome} (${classe}) na sala ${sala_codigo}`);
+
+    return NextResponse.json({ ok: true, personagem }, { status: 201 });
+  } catch (err) {
+    console.error('[API] Erro ao criar personagem:', err);
+    return NextResponse.json(
+      { error: 'Erro interno do servidor' },
+      { status: 500 }
     );
   }
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const sala = searchParams.get('sala');
+
+  if (!sala) {
+    return NextResponse.json({ personagens: [] });
+  }
+
+  const resultado: unknown[] = [];
+  for (const [chave, p] of personagens.entries()) {
+    if (chave.startsWith(`${sala}:`)) {
+      resultado.push(p);
+    }
+  }
+
+  return NextResponse.json({ personagens: resultado });
 }
