@@ -87,84 +87,31 @@ export default function Jogo2D() {
   const imgAizen     = useImagem(LINKS.aizen  ?? null);
 
   // ── Socket.io ──
-  // ── Socket.io (Versão Corrigida para Produção) ──
   useEffect(() => {
-    // 1. Define a URL de conexão baseada no ambiente
-    const isProduction = typeof window !== 'undefined' && window.location.hostname.includes('railway.app');
-    const socketURL = isProduction 
-      ? "https://jogotm-production-9b1e.up.railway.app" 
-      : `http://localhost:8080`;
-
-    // 2. Tenta pegar o código da sala pela URL (?sala=XXXX), se não tiver, usa o localStorage
-    const params = new URLSearchParams(window.location.search);
-    const codigoSala = params.get('sala') || localStorage.getItem('glory_dark_last_sala') || '';
-if (!codigoSala) {
-  window.location.href = '/';
-  return;
-}
-
-    const s = io(socketURL, { 
-      transports: ['websocket', 'polling'],
-      
-    });
-    
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const s = io(`http://${host}:3001`, { transports: ['websocket'] });
     socketRef.current = s;
+    const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
 
     s.on('connect', () => {
       setOnline(true);
-      console.log("⚔️ Conectado ao servidor. Sala:", codigoSala);
-      localStorage.setItem('glory_dark_last_sala', codigoSala);
-      
-      // Envia os dados para entrar na partida
-      s.emit('entrar_no_jogo', { 
-        codigo: codigoSala, 
-        nome: status.nome, 
-        classe: status.classe, 
-        x: 450, 
-        y: 300 
-      });
+      s.emit('entrar_no_jogo', { codigo: codigoSala, nome: status.nome, classe: status.classe, x: 1500, y: 1000 });
     });
-
     s.on('disconnect', () => setOnline(false));
-
     s.on('lista_jogadores', (lista: JogadorRemoto[]) => {
       lista.forEach(j => { if (j.id !== s.id) remotosRef.current[j.id] = j; });
       setQtJog(1 + Object.keys(remotosRef.current).length);
     });
-
-    s.on('novo_jogador_conectado', (j: JogadorRemoto) => { 
-      remotosRef.current[j.id] = j; 
-      setQtJog(q => q + 1); 
-    });
-
+    s.on('novo_jogador_conectado', (j: JogadorRemoto) => { remotosRef.current[j.id] = j; setQtJog(q => q + 1); });
     s.on('jogador_moveu', (d: { id:string; x:number; y:number; direcaoRad:number }) => {
-      if (remotosRef.current[d.id]) { 
-        remotosRef.current[d.id].x = d.x; 
-        remotosRef.current[d.id].y = d.y; 
-        remotosRef.current[d.id].direcaoRad = d.direcaoRad; 
-      }
+      if (remotosRef.current[d.id]) { remotosRef.current[d.id].x=d.x; remotosRef.current[d.id].y=d.y; remotosRef.current[d.id].direcaoRad=d.direcaoRad; }
     });
-
     s.on('hp_jogador', (d: { id:string; hp:number; hpMax:number }) => {
-      if (remotosRef.current[d.id]) { 
-        remotosRef.current[d.id].hp = d.hp; 
-        remotosRef.current[d.id].hpMax = d.hpMax; 
-      }
+      if (remotosRef.current[d.id]) { remotosRef.current[d.id].hp=d.hp; remotosRef.current[d.id].hpMax=d.hpMax; }
     });
-
-    s.on('jogador_saiu', (id: string) => { 
-      delete remotosRef.current[id]; 
-      setQtJog(q => Math.max(1, q - 1)); 
-    });
-
-    s.on('voce_e_host', (val: boolean) => { 
-      souHostRef.current = val; 
-    });
-
-    s.on('novo_host', (id: string) => { 
-      if (s.id === id) souHostRef.current = true; 
-    });
-
+    s.on('jogador_saiu', (id: string) => { delete remotosRef.current[id]; setQtJog(q => Math.max(1, q - 1)); });
+    s.on('voce_e_host', (val: boolean) => { souHostRef.current = val; });
+    s.on('novo_host', (id: string) => { if (s.id === id) souHostRef.current = true; });
     return () => { s.disconnect(); };
   }, [status.nome, status.classe]);
 
@@ -367,27 +314,21 @@ if (!codigoSala) {
     let monstros = gerarOnda(ondaAtual);
 
     // ── Eventos de sincronização de monstros ──
-   // ── Espera o socket conectar para registrar os eventos dos monstros ──
-  const intervalSocket = setInterval(() => {
-    const s = socketRef.current;
-    if (s) {
-      clearInterval(intervalSocket); // Achou o socket, para de procurar!
-
-      s.on('monstros_atualizados', (data: { monstros: Monstro[]; ondaAtual: number; raioBossArr: RaioBoss[] }) => {
+    const socket = socketRef.current;
+    if (socket) {
+      socket.on('monstros_atualizados', (data: { monstros: Monstro[]; ondaAtual: number; raioBossArr: RaioBoss[] }) => {
         if (!souHostRef.current) { monstros = data.monstros; ondaAtual = data.ondaAtual; raioBossArr = data.raioBossArr || []; }
       });
-      
-      s.on('aplicar_dano', (data: { monstroId: number; dano: number }) => {
+      socket.on('aplicar_dano', (data: { monstroId: number; dano: number }) => {
         if (!souHostRef.current) return;
         const m = monstros.find(m => m.id === data.monstroId);
         if (m) { m.hp -= data.dano; m.hitTimer = 6; }
       });
-      
-      s.on('onda_mudou', (data: { ondaAtual: number }) => {
+      socket.on('onda_mudou', (data: { ondaAtual: number }) => {
         if (!souHostRef.current) { ondaAtual = data.ondaAtual; raioBossArr = []; projetilInimigos = []; }
       });
     }
-  }, 100); // Checa a cada 100ms
+
     const player = {
       x:WORLD_WIDTH/2, y:WORLD_HEIGHT/2,
       speed:3+status.agi*.15, size:80,
@@ -427,17 +368,14 @@ if (!codigoSala) {
       if(killsAcum<KILLS_NEEDED) killsAcum++;
       if(sombrasFila.length<MAX_SOMBRAS) sombrasFila.push({ tipo:m.tipo, size:m.size, maxHp:m.maxHp, ordemMorte:contadorMorte });
     }
+
     function causarDano(m: Monstro, dano: number) {
-      // 1. Aplica o dano visual/local IMEDIATAMENTE (para não ter lag)
-      m.hp -= dano;
-      m.hitTimer = 8;
-    
-      // 2. Sempre avisa o servidor, independente de ser host ou não
-      // Assim o servidor sincroniza com todos os outros jogadores
-      socketRef.current?.emit('dano_monstro', { 
-        monstroId: m.id, 
-        dano: dano 
-      });
+      if (souHostRef.current) {
+        m.hp -= dano;
+        m.hitTimer = 8;
+      } else {
+        socketRef.current?.emit('dano_monstro', { monstroId: m.id, dano });
+      }
     }
 
     // ── causarDanoRimuru: aplica fator especial se for o Rimuru e verifica transição de fase ──
@@ -1198,7 +1136,6 @@ if (!codigoSala) {
         }
         const invRdy=invocCooldown<=0&&!invocAtivo&&!ariseAtivo,invAt=invocAtivo,icdr=invocCooldown/INVOC_CD_MAX;
         const ubx=canvas.width-74,uby=canvas.height-148,ubs=58;
-        
         ctx.fillStyle=invAt?'rgba(25,0,50,.99)':invRdy?'rgba(60,0,100,.94)':'rgba(10,0,20,.88)';ctx.fillRect(ubx,uby,ubs,ubs);ctx.strokeStyle=invAt?'#e879f9':invRdy?'#a855f7':'#3b0764';ctx.lineWidth=invAt||invRdy?2.5:1.5;if(invAt||invRdy){ctx.shadowColor=invAt?'#e879f9':'#a855f7';ctx.shadowBlur=invAt?28:14;}ctx.strokeRect(ubx,uby,ubs,ubs);ctx.shadowBlur=0;
         if(!invRdy&&!invAt){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(ubx,uby,ubs,ubs*icdr);}
         ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillStyle=invAt?'#f0abfc':invRdy?'#c084fc':'#6b21a8';ctx.fillText('ULTIMATE',ubx+ubs/2,uby+11);ctx.font='bold 12px monospace';ctx.fillStyle=invAt?'#f0abfc':invRdy?'#e879f9':'#4c1d95';if(invAt||invRdy){ctx.shadowColor=invAt?'#e879f9':'#a855f7';ctx.shadowBlur=invAt?18:8;}ctx.fillText('⚔🐜',ubx+ubs/2,uby+35);ctx.shadowBlur=0;ctx.font='bold 8px monospace';ctx.fillStyle=invAt?'#fae8ff':invRdy?'#f5d0fe':'#4c1d95';ctx.fillText('IGRIS+BERU',ubx+ubs/2,uby+48);ctx.font='bold 10px monospace';ctx.fillStyle=invAt?'#fae8ff':invRdy?'#f5d0fe':'#4c1d95';ctx.fillText('[X]',ubx+ubs/2,uby+58);
@@ -1287,5 +1224,4 @@ if (!codigoSala) {
       </div>
     </main>
   );
-
 }
