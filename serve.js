@@ -1,98 +1,69 @@
-const mysql = require('mysql2/promise');
-const io = require('socket.io')(3001, {
-  cors: { 
-    origin: "*", // O asterisco libera a entrada para qualquer IP!
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+const port = process.env.PORT || 8080;
+
+const httpServer = createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Glory Dark Server Online');
+});
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'glory_dark_db'
-};
-
-const pool = mysql.createPool(dbConfig);
-
 // ─── ESTADO EM MEMÓRIA ────────────────────────────────────────────────────────
 const salasEmMemoria = {};
+const salasMeta = {};
 const estadoJogadores = {};
-
-// Estado de jogo por sala: monstros, onda, host autorizado a sincronizar
-// Apenas o HOST de cada sala é "autoritativo" — ele envia o estado dos monstros
-// Os outros jogadores recebem e renderizam.
 const estadoJogo = {};
-// { [sala]: { ondaAtual, hostId, monstros: [], raioBossArr: [] } }
 // ─────────────────────────────────────────────────────────────────────────────
 
-(async () => {
-  try {
-    const connection = await pool.getConnection();
-    console.log('✅ Conexão com o Banco de Dados estabelecida!');
-    connection.release();
-  } catch (err) {
-    console.error('❌ ERRO NO BANCO:', err.message);
-  }
-})();
-
-console.log('🚀 Servidor de Glory Dark despertado na porta 3001');
+httpServer.listen(port, () => {
+  console.log(`🚀 Servidor de Glory Dark despertado na porta ${port}`);
+});
 
 io.on('connection', (socket) => {
   console.log('✨ Viajante conectado:', socket.id);
 
   // ── 1. CRIAR SALA ──────────────────────────────────────────────────────────
-  socket.on('criar_sala', async ({ nome, limite }) => {
+  socket.on('criar_sala', ({ nome, limite }) => {
     const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
-    try {
-      await pool.execute(
-        'INSERT INTO salas (codigo, host_id, limite_jogadores, status) VALUES (?, ?, ?, "lobby")',
-        [codigo, socket.id, limite]
-      );
-      socket.join(codigo);
-      salasEmMemoria[codigo] = [nome];
-      socket.emit('sala_criada', codigo);
-      io.to(codigo).emit('atualizar_jogadores', salasEmMemoria[codigo]);
-      console.log(`🏰 Sala ${codigo} criada por ${nome}`);
-    } catch (err) {
-      socket.emit('erro', 'Falha ao registrar sala.');
-    }
+
+    socket.join(codigo);
+    salasEmMemoria[codigo] = [nome];
+    salasMeta[codigo] = { limite, status: 'lobby' };
+
+    socket.emit('sala_criada', codigo);
+    io.to(codigo).emit('atualizar_jogadores', salasEmMemoria[codigo]);
+    console.log(`🏰 Sala ${codigo} criada por ${nome}`);
   });
 
   // ── 2. ENTRAR NA SALA ──────────────────────────────────────────────────────
-  socket.on('entrar_sala', async ({ nome, codigo }) => {
-    try {
-      const [rows] = await pool.execute(
-        'SELECT * FROM salas WHERE codigo = ? AND status = "lobby"',
-        [codigo]
-      );
-      if (rows.length > 0) {
-        const listaAtual = salasEmMemoria[codigo] || [];
-        if (listaAtual.length >= rows[0].limite_jogadores)
-          return socket.emit('erro', 'Guilda cheia!');
+  socket.on('entrar_sala', ({ nome, codigo }) => {
+    const meta = salasMeta[codigo];
 
-        socket.join(codigo);
-        if (!salasEmMemoria[codigo]) salasEmMemoria[codigo] = [];
-        salasEmMemoria[codigo].push(nome);
+    if (!meta || meta.status !== 'lobby')
+      return socket.emit('erro', 'Selo inválido ou jogo em andamento.');
 
-        io.to(codigo).emit('entrou_na_sala', { codigo, jogadores: salasEmMemoria[codigo] });
-        io.to(codigo).emit('atualizar_jogadores', salasEmMemoria[codigo]);
-      } else {
-        socket.emit('erro', 'Selo inválido ou jogo em andamento.');
-      }
-    } catch (err) {
-      socket.emit('erro', 'Erro ao acessar o reino.');
-    }
+    const listaAtual = salasEmMemoria[codigo] || [];
+    if (listaAtual.length >= meta.limite)
+      return socket.emit('erro', 'Guilda cheia!');
+
+    socket.join(codigo);
+    salasEmMemoria[codigo].push(nome);
+
+    io.to(codigo).emit('entrou_na_sala', { codigo, jogadores: salasEmMemoria[codigo] });
+    io.to(codigo).emit('atualizar_jogadores', salasEmMemoria[codigo]);
   });
 
   // ── 3. INICIAR TRANSIÇÃO ───────────────────────────────────────────────────
-  socket.on('comecar_jogo', async ({ codigo }) => {
-    try {
-      await pool.execute('UPDATE salas SET status = "jogando" WHERE codigo = ?', [codigo]);
-      io.to(codigo).emit('iniciar_customizacao', { codigoSala: codigo });
-    } catch (err) {
-      socket.emit('erro', 'Erro ao iniciar ritual.');
-    }
+  socket.on('comecar_jogo', ({ codigo }) => {
+    if (salasMeta[codigo]) salasMeta[codigo].status = 'jogando';
+    io.to(codigo).emit('iniciar_costumizacao', { codigoSala: codigo });
   });
 
   // ── 4. ENTRAR NO MAPA ──────────────────────────────────────────────────────
@@ -105,17 +76,16 @@ io.on('connection', (socket) => {
       classe,
       x,
       y,
-      hp: 200, // HP aumentado para coop
+      hp: 200,
       hpMax: 200,
       sala: codigo,
       direcaoRad: 0
     };
 
-    // Inicializa estado de jogo da sala se for o primeiro a entrar
     if (!estadoJogo[codigo]) {
       estadoJogo[codigo] = {
         ondaAtual: 1,
-        hostId: socket.id, // primeiro a entrar é o host autoritativo
+        hostId: socket.id,
         estadoPartida: 'jogando'
       };
       console.log(`🎮 Host da sala ${codigo}: ${socket.id} (${nome})`);
@@ -129,10 +99,11 @@ io.on('connection', (socket) => {
     console.log(`⚔️  ${nome} (${classe}) entrou na sala ${codigo}`);
   });
 
-  // ── 5. SINCRONIZAR MOVIMENTO (60 FPS) ──────────────────────────────────────
+  // ── 5. SINCRONIZAR MOVIMENTO ───────────────────────────────────────────────
   socket.on('mover', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     player.x = data.x;
     player.y = data.y;
     player.direcaoRad = data.direcaoRad;
@@ -149,26 +120,25 @@ io.on('connection', (socket) => {
   socket.on('atacar', (dadosAtaque) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     socket.to(player.sala).emit('jogador_atacou', {
       id: socket.id,
       tipo: dadosAtaque.tipo,
       angulo: dadosAtaque.angulo,
       classe: player.classe,
-      // Para projéteis do sombrio (área)
       x: dadosAtaque.x,
       y: dadosAtaque.y,
     });
   });
 
-  // ── 7. HOST ENVIA ESTADO DOS MONSTROS (a cada ~100ms) ─────────────────────
-  // Apenas o host envia — os clientes recebem e interpolam
+  // ── 7. HOST ENVIA ESTADO DOS MONSTROS ─────────────────────────────────────
   socket.on('sync_monstros', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
-    const sala = estadoJogo[player.sala];
-    if (!sala || sala.hostId !== socket.id) return; // só host pode sincronizar
 
-    // Repassa para todos os outros na sala
+    const sala = estadoJogo[player.sala];
+    if (!sala || sala.hostId !== socket.id) return;
+
     socket.to(player.sala).emit('monstros_atualizados', {
       monstros: data.monstros,
       ondaAtual: data.ondaAtual,
@@ -176,14 +146,14 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ── 8. NOTIFICAR DANO EM MONSTRO (qualquer cliente pode reportar) ──────────
-  // O host aplica o dano e confirma via sync_monstros
+  // ── 8. NOTIFICAR DANO EM MONSTRO ──────────────────────────────────────────
   socket.on('dano_monstro', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
-    // Repassa para o host da sala aplicar
+
     const sala = estadoJogo[player.sala];
     if (!sala) return;
+
     io.to(sala.hostId).emit('aplicar_dano', {
       monstroId: data.monstroId,
       dano: data.dano,
@@ -195,6 +165,7 @@ io.on('connection', (socket) => {
   socket.on('nova_onda', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     const sala = estadoJogo[player.sala];
     if (!sala || sala.hostId !== socket.id) return;
 
@@ -203,10 +174,11 @@ io.on('connection', (socket) => {
     console.log(`🌊 Sala ${player.sala}: Onda ${data.ondaAtual}`);
   });
 
-  // ── 10. SINCRONIZAR HP DO PLAYER (raio do boss etc.) ──────────────────────
+  // ── 10. SINCRONIZAR HP DO PLAYER ──────────────────────────────────────────
   socket.on('sync_hp', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     player.hp = data.hp;
     socket.to(player.sala).emit('hp_jogador', {
       id: socket.id,
@@ -215,12 +187,14 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ── 11. GAME OVER / VITÓRIA (host anuncia) ─────────────────────────────────
+  // ── 11. GAME OVER / VITÓRIA ────────────────────────────────────────────────
   socket.on('fim_de_jogo', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     const sala = estadoJogo[player.sala];
     if (!sala || sala.hostId !== socket.id) return;
+
     sala.estadoPartida = data.estado;
     io.to(player.sala).emit('jogo_encerrado', { estado: data.estado });
   });
@@ -229,6 +203,7 @@ io.on('connection', (socket) => {
   socket.on('habilidade_z', (data) => {
     const player = estadoJogadores[socket.id];
     if (!player) return;
+
     socket.to(player.sala).emit('jogador_usou_z', {
       id: socket.id,
       classe: player.classe,
@@ -239,36 +214,36 @@ io.on('connection', (socket) => {
   // ── 13. DESCONEXÃO ─────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     const player = estadoJogadores[socket.id];
-    if (player) {
-      const salaCodigo = player.sala;
+    if (!player) return;
 
-      // Se o host saiu, migra para outro jogador
-      const sala = estadoJogo[salaCodigo];
-      if (sala && sala.hostId === socket.id) {
-        const proximoHost = Object.values(estadoJogadores).find(
-          p => p.sala === salaCodigo && p.id !== socket.id
-        );
-        if (proximoHost) {
-          sala.hostId = proximoHost.id;
-          io.to(proximoHost.id).emit('voce_e_host', true);
-          io.to(salaCodigo).emit('novo_host', proximoHost.id);
-          console.log(`👑 Novo host na sala ${salaCodigo}: ${proximoHost.nome}`);
-        } else {
-          // Sala vazia — limpa
-          delete estadoJogo[salaCodigo];
-        }
+    const salaCodigo = player.sala;
+    const sala = estadoJogo[salaCodigo];
+
+    if (sala && sala.hostId === socket.id) {
+      const proximoHost = Object.values(estadoJogadores).find(
+        p => p.sala === salaCodigo && p.id !== socket.id
+      );
+      if (proximoHost) {
+        sala.hostId = proximoHost.id;
+        io.to(proximoHost.id).emit('voce_e_host', true);
+        io.to(salaCodigo).emit('novo_host', proximoHost.id);
+        console.log(`👑 Novo host na sala ${salaCodigo}: ${proximoHost.nome}`);
+      } else {
+        delete estadoJogo[salaCodigo];
+        delete salasEmMemoria[salaCodigo];
+        delete salasMeta[salaCodigo];
       }
-
-      delete estadoJogadores[socket.id];
-
-      if (salasEmMemoria[salaCodigo]) {
-        salasEmMemoria[salaCodigo] = salasEmMemoria[salaCodigo].filter(
-          n => n !== player.nome
-        );
-      }
-
-      io.to(salaCodigo).emit('jogador_saiu', socket.id);
-      console.log(`👣 ${player.nome} saiu da sala ${salaCodigo}.`);
     }
+
+    delete estadoJogadores[socket.id];
+
+    if (salasEmMemoria[salaCodigo]) {
+      salasEmMemoria[salaCodigo] = salasEmMemoria[salaCodigo].filter(
+        n => n !== player.nome
+      );
+    }
+
+    io.to(salaCodigo).emit('jogador_saiu', socket.id);
+    console.log(`👣 ${player.nome} saiu da sala ${salaCodigo}.`);
   });
 });
