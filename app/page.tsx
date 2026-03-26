@@ -42,7 +42,7 @@ export default function RpgLobby() {
     const salaSalva  = localStorage.getItem('glory_dark_last_sala');
     if (nomeSalvo && salaSalva) setHeroiSalvo({ nome: nomeSalvo, sala: salaSalva });
 
-    socketRef.current = io('http://localhost:3001');
+    socketRef.current = io('https://jogotm-production-9b1e.up.railway.app');
 
     socketRef.current.on('sala_criada', (codigo) => {
       setCodigoSala(codigo);

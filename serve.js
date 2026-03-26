@@ -1,18 +1,30 @@
-const io = require('socket.io')(3001, {
-  cors: { 
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+const port = process.env.PORT || 8080;
+
+const httpServer = createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Glory Dark Server Online');
+});
+
+const io = new Server(httpServer, {
+  cors: {
     origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
 // ─── ESTADO EM MEMÓRIA ────────────────────────────────────────────────────────
-const salasEmMemoria = {};   // { [codigo]: [nomeJogador1, ...] }
-const salasMeta = {};        // { [codigo]: { limite, status } }
-const estadoJogadores = {};  // { [socketId]: { id, nome, classe, x, y, hp, ... } }
-const estadoJogo = {};       // { [codigo]: { ondaAtual, hostId, estadoPartida } }
+const salasEmMemoria = {};
+const salasMeta = {};
+const estadoJogadores = {};
+const estadoJogo = {};
 // ─────────────────────────────────────────────────────────────────────────────
 
-console.log('🚀 Servidor de Glory Dark despertado na porta 3001');
+httpServer.listen(port, () => {
+  console.log(`🚀 Servidor de Glory Dark despertado na porta ${port}`);
+});
 
 io.on('connection', (socket) => {
   console.log('✨ Viajante conectado:', socket.id);
@@ -207,7 +219,6 @@ io.on('connection', (socket) => {
     const salaCodigo = player.sala;
     const sala = estadoJogo[salaCodigo];
 
-    // Se o host saiu, migra para outro jogador
     if (sala && sala.hostId === socket.id) {
       const proximoHost = Object.values(estadoJogadores).find(
         p => p.sala === salaCodigo && p.id !== socket.id
@@ -218,7 +229,6 @@ io.on('connection', (socket) => {
         io.to(salaCodigo).emit('novo_host', proximoHost.id);
         console.log(`👑 Novo host na sala ${salaCodigo}: ${proximoHost.nome}`);
       } else {
-        // Sala vazia — limpa tudo
         delete estadoJogo[salaCodigo];
         delete salasEmMemoria[salaCodigo];
         delete salasMeta[salaCodigo];
