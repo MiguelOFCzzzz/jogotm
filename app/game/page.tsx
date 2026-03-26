@@ -1198,6 +1198,7 @@ if (!codigoSala) {
         }
         const invRdy=invocCooldown<=0&&!invocAtivo&&!ariseAtivo,invAt=invocAtivo,icdr=invocCooldown/INVOC_CD_MAX;
         const ubx=canvas.width-74,uby=canvas.height-148,ubs=58;
+        
         ctx.fillStyle=invAt?'rgba(25,0,50,.99)':invRdy?'rgba(60,0,100,.94)':'rgba(10,0,20,.88)';ctx.fillRect(ubx,uby,ubs,ubs);ctx.strokeStyle=invAt?'#e879f9':invRdy?'#a855f7':'#3b0764';ctx.lineWidth=invAt||invRdy?2.5:1.5;if(invAt||invRdy){ctx.shadowColor=invAt?'#e879f9':'#a855f7';ctx.shadowBlur=invAt?28:14;}ctx.strokeRect(ubx,uby,ubs,ubs);ctx.shadowBlur=0;
         if(!invRdy&&!invAt){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(ubx,uby,ubs,ubs*icdr);}
         ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillStyle=invAt?'#f0abfc':invRdy?'#c084fc':'#6b21a8';ctx.fillText('ULTIMATE',ubx+ubs/2,uby+11);ctx.font='bold 12px monospace';ctx.fillStyle=invAt?'#f0abfc':invRdy?'#e879f9':'#4c1d95';if(invAt||invRdy){ctx.shadowColor=invAt?'#e879f9':'#a855f7';ctx.shadowBlur=invAt?18:8;}ctx.fillText('⚔🐜',ubx+ubs/2,uby+35);ctx.shadowBlur=0;ctx.font='bold 8px monospace';ctx.fillStyle=invAt?'#fae8ff':invRdy?'#f5d0fe':'#4c1d95';ctx.fillText('IGRIS+BERU',ubx+ubs/2,uby+48);ctx.font='bold 10px monospace';ctx.fillStyle=invAt?'#fae8ff':invRdy?'#f5d0fe':'#4c1d95';ctx.fillText('[X]',ubx+ubs/2,uby+58);
@@ -1286,5 +1287,5 @@ if (!codigoSala) {
       </div>
     </main>
   );
-  
+
 }

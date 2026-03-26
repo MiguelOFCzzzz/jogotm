@@ -12,6 +12,7 @@ const COR_CLASSE: Record<string, string> = {
   aizen:     '#ffffff',
 };
 
+
 const PREVIEW_CLASSES = [
   { id: 'guerreiro', emoji: '⛩️', nome: 'SUKUNA' },
   { id: 'mago',      emoji: '🤞', nome: 'GOJO'   },

@@ -1963,6 +1963,7 @@ export function desenharHogyokuFusion(
   ctx.globalAlpha = alpha * .5;
   ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(W * .1, H - 10, W * .8, 4);
   ctx.fillStyle = '#fbbf24'; ctx.fillRect(W * .1, H - 10, W * .8 * prog, 4);
+  
 
   ctx.globalAlpha = 1; ctx.restore();
 }

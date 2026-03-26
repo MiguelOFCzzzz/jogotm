@@ -102,6 +102,7 @@ function ConteudoCostumizacao() {
 
   // Cor de destaque por classe (usada em vários lugares)
   const COR: Record<string, string> = {
+    
     guerreiro: '#ef4444',
     mago:      '#24dddd',
     sombrio:   '#6366f1',
