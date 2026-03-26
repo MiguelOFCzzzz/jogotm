@@ -1224,4 +1224,5 @@ export default function Jogo2D() {
       </div>
     </main>
   );
+  
 }
