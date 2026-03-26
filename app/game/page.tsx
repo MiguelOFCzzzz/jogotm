@@ -104,8 +104,8 @@ if (!codigoSala) {
 }
 
     const s = io(socketURL, { 
-      transports: ['websocket'],
-      upgrade: false 
+      transports: ['websocket', 'polling'],
+      
     });
     
     socketRef.current = s;
