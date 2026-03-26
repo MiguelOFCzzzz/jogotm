@@ -64,7 +64,7 @@ function ConteudoCostumizacao() {
   
   const sala_codigo = searchParams.get('sala');
 
-  const aceitarDestino = async () => {
+  const aceitarDestino = () => {
     if (!nome.trim()) {
       alert("Escreva o nome do seu herói nas crônicas!");
       return;
@@ -73,40 +73,27 @@ function ConteudoCostumizacao() {
       alert("Erro: Código da sala não encontrado.");
       return;
     }
-
+  
     setLoading(true);
+  
     try {
-      const response = await fetch('/api/personagem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome,
-          classe: classeSel.id,
-          str: classeSel.atributos.str,
-          agi: classeSel.atributos.agi,
-          int: classeSel.atributos.int,
-          vit: classeSel.atributos.vit,
-          sala_codigo,
-        }),
-      });
-
-      if (response.ok) {
-        localStorage.setItem('glory_dark_char_nome',   nome);
-        localStorage.setItem('glory_dark_char_classe', classeSel.id);
-        localStorage.setItem('glory_dark_char_str',    String(classeSel.atributos.str));
-        localStorage.setItem('glory_dark_char_agi',    String(classeSel.atributos.agi));
-        localStorage.setItem('glory_dark_char_int',    String(classeSel.atributos.int));
-        localStorage.setItem('glory_dark_char_vit',    String(classeSel.atributos.vit));
-        localStorage.setItem('glory_dark_last_sala',   sala_codigo);
-        setTimeout(() => router.push(`/game?sala=${sala_codigo}`), 100);
-      } else {
-        const data = await response.json();
-        alert(`Erro: ${data.error || 'Falha ao salvar'}`);
-      }
+      // 1. Salva os dados localmente para o jogo ler na próxima tela
+      localStorage.setItem('glory_dark_char_nome',   nome);
+      localStorage.setItem('glory_dark_char_classe', classeSel.id);
+      localStorage.setItem('glory_dark_char_str',    String(classeSel.atributos.str));
+      localStorage.setItem('glory_dark_char_agi',    String(classeSel.atributos.agi));
+      localStorage.setItem('glory_dark_char_int',    String(classeSel.atributos.int));
+      localStorage.setItem('glory_dark_char_vit',    String(classeSel.atributos.vit));
+      localStorage.setItem('glory_dark_last_sala',   sala_codigo);
+  
+      // 2. Pequeno delay para o feedback visual de "Selando..."
+      setTimeout(() => {
+        router.push(`/game?sala=${sala_codigo}`);
+      }, 800);
+  
     } catch (error) {
-      console.error("Erro na requisição:", error);
-      alert("Erro de conexão com a API.");
-    } finally {
+      console.error("Erro ao preparar jornada:", error);
+      alert("Falha ao despertar seus poderes. Tente novamente.");
       setLoading(false);
     }
   };
