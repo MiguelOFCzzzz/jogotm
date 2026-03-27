@@ -55,7 +55,7 @@ export default function Jogo2D() {
   const mouseRef   = useRef({ x: 450, y: 300 });
   const socketRef  = useRef<Socket | null>(null);
   const remotosRef = useRef<Record<string, JogadorRemoto>>({});
-  const souHostRef = useRef(false);
+   const souHostRef = useRef(true);
   const [online, setOnline] = useState(false);
   const [qtJog, setQtJog]   = useState(1);
 

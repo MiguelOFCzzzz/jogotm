@@ -2,12 +2,12 @@
   "name": "jogotm",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
+ "scripts": {
+  "dev": "node server-combined.js",
+  "build": "next build",
+  "start": "node server-combined.js",
+  "lint": "eslint"
+},
   "dependencies": {
     "@prisma/client": "^7.4.2",
     "dotenv": "^17.3.1",
