@@ -89,8 +89,10 @@ export default function Jogo2D() {
 
   // ── Socket.io ──
   useEffect(() => {
-    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-    const s = io(`http://${host}:3001`, { transports: ['websocket'] });
+   const socketUrl = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_SOCKET_URL || `${window.location.protocol}//${window.location.host}`)
+  : 'http://localhost:3000';
+const s = io(socketUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = s;
     const codigoSala = typeof window !== 'undefined' ? (localStorage.getItem('glory_dark_sala') || 'default') : 'default';
 
